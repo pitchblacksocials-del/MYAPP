@@ -597,6 +597,36 @@ function sanitizeBusiness(input, ownerId) {
   };
 }
 
+function updateBusinessProfile(business, input) {
+  const services = Array.isArray(input.services) ? input.services : String(input.services || business.services?.join(",") || "").split(",");
+  const province = canonicalFromList(input.province || business.province, provinces);
+  const city = canonicalFromList(input.city || business.city, cities);
+  const category = canonicalFromList(input.category || business.category, categories) || business.category;
+  business.name = String(input.name || business.name || "").trim();
+  business.category = category;
+  business.services = services.map((item) => String(item).trim()).filter(Boolean);
+  business.description = String(input.description ?? business.description ?? "").trim();
+  business.province = province;
+  business.city = city;
+  business.address = String(input.address ?? business.address ?? "").trim();
+  business.phone = String(input.phone ?? business.phone ?? "").trim();
+  business.email = String(input.email ?? business.email ?? "").trim();
+  business.website = String(input.website ?? business.website ?? "").trim();
+  business.hours = String(input.hours ?? business.hours ?? "").trim();
+  business.pricingMode = String(input.pricingMode ?? business.pricingMode ?? "Request quote");
+  business.priceRange = String(input.priceRange ?? business.priceRange ?? "Request quote");
+  if (Array.isArray(input.gallery)) business.gallery = input.gallery.map(String).filter(Boolean).slice(0, 12);
+  if (input.cover !== undefined) business.cover = String(input.cover || "");
+  if (input.logo !== undefined) business.logo = String(input.logo || "");
+  if (input.verificationDocuments?.proofOfId || input.verificationDocuments?.proofOfAddress) {
+    business.verificationDocuments ||= {};
+    if (input.verificationDocuments.proofOfId) business.verificationDocuments.proofOfId = input.verificationDocuments.proofOfId;
+    if (input.verificationDocuments.proofOfAddress) business.verificationDocuments.proofOfAddress = input.verificationDocuments.proofOfAddress;
+    business.verificationDocuments.submittedAt = input.verificationDocuments.submittedAt || new Date().toISOString();
+  }
+  business.updatedAt = new Date().toISOString();
+}
+
 const sseClients = new Set();
 function broadcast(event, payload) {
   const packet = `event: ${event}\ndata: ${JSON.stringify(payload)}\n\n`;
@@ -737,6 +767,21 @@ async function api(req, res, pathname, query) {
     if (!business) return sendJson(res, { error: "Business not found." }, 404);
     const reviews = db.reviews.filter((review) => review.businessId === business.id);
     return sendJson(res, { business: publicBusiness(business), reviews });
+  }
+
+  if (req.method === "PATCH" && businessMatch) {
+    const user = requireAuth(req, res, db, "business");
+    if (!user) return;
+    const business = db.businesses.find((biz) => biz.id === businessMatch[1] && biz.ownerId === user.id);
+    if (!business) return sendJson(res, { error: "Business not found." }, 404);
+    const body = await readBody(req);
+    if (!canonicalFromList(body.province || business.province, provinces)) return sendJson(res, { error: "Please select one of South Africa's nine provinces." }, 400);
+    if (!canonicalFromList(body.city || business.city, cities)) return sendJson(res, { error: "Please select a South African city or town from the list." }, 400);
+    updateBusinessProfile(business, body);
+    db.notifications.push({ id: uid("not"), type: "business_updated", text: `${business.name} updated profile`, createdAt: new Date().toISOString(), read: false });
+    await writeDb(db);
+    broadcast("business", publicBusiness(business));
+    return sendJson(res, { business: publicBusiness(business) });
   }
 
   if (req.method === "POST" && pathname === "/api/businesses") {

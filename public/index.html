@@ -7,7 +7,7 @@
   <meta name="description" content="Connect-ZA connects customers with trusted South African businesses and service providers.">
   <title>Connect-ZA | Connecting Professionals</title>
   <link rel="manifest" href="/manifest.webmanifest">
-  <link rel="stylesheet" href="/styles.css?v=admin-login-fix">
+  <link rel="stylesheet" href="/styles.css?v=edit-business-profile">
 </head>
 <body>
   <header class="app-header">
@@ -288,40 +288,50 @@
   <dialog id="businessDialog" class="modal">
     <form method="dialog" class="modal-card business-modal">
       <button class="close-btn" value="cancel">×</button>
-      <h2>Register your business</h2>
-      <div class="business-form-grid">
-        <input id="bizName" placeholder="Company name">
-        <select id="bizCategory"></select>
-        <textarea id="bizDescription" placeholder="About the company"></textarea>
-        <input id="bizServices" placeholder="Services offered, comma separated">
-        <input id="bizPhone" placeholder="Business phone / WhatsApp">
-        <input id="bizEmail" placeholder="Business email">
-        <input id="bizWebsite" placeholder="Website">
-        <select id="bizProvince"></select>
-        <select id="bizCity" aria-label="South African city or town"></select>
-        <input id="bizAddress" placeholder="Physical address">
-        <input id="bizHours" placeholder="Operating hours">
-        <input id="bizPrice" placeholder="Pricing or request quote option">
-        <input id="bizGallery" type="file" multiple accept="image/*,video/*">
-        <small class="upload-note">Uploads: max 8MB per file, 20MB total.</small>
-        <fieldset class="verification-docs">
-          <legend>Verification documents</legend>
-          <label>
-            <span>Proof of ID</span>
-            <input id="bizProofId" type="file" accept="image/*,.pdf,application/pdf">
-          </label>
-          <label>
-            <span>Proof of address</span>
-            <input id="bizProofAddress" type="file" accept="image/*,.pdf,application/pdf">
-          </label>
-        </fieldset>
+      <h2 id="businessDialogTitle">Business profile</h2>
+      <select id="bizProfileSelect" class="business-profile-select" aria-label="Select business profile"></select>
+      <div class="tabs business-tabs">
+        <button type="button" class="business-tab active" data-business-tab="details">Profile details</button>
+        <button type="button" class="business-tab" data-business-tab="photos">Project photos</button>
       </div>
-      <button id="saveBusinessBtn" type="button" class="primary-btn">Submit for approval</button>
+      <div id="businessDetailsPane" class="business-pane">
+        <div class="business-form-grid">
+          <input id="bizName" placeholder="Company name">
+          <select id="bizCategory"></select>
+          <textarea id="bizDescription" placeholder="About the company"></textarea>
+          <input id="bizServices" placeholder="Services offered, comma separated">
+          <input id="bizPhone" placeholder="Business phone / WhatsApp">
+          <input id="bizEmail" placeholder="Business email">
+          <input id="bizWebsite" placeholder="Website">
+          <select id="bizProvince"></select>
+          <select id="bizCity" aria-label="South African city or town"></select>
+          <input id="bizAddress" placeholder="Physical address">
+          <input id="bizHours" placeholder="Operating hours">
+          <input id="bizPrice" placeholder="Pricing or request quote option">
+          <fieldset class="verification-docs">
+            <legend>Verification documents</legend>
+            <label>
+              <span>Proof of ID</span>
+              <input id="bizProofId" type="file" accept="image/*,.pdf,application/pdf">
+            </label>
+            <label>
+              <span>Proof of address</span>
+              <input id="bizProofAddress" type="file" accept="image/*,.pdf,application/pdf">
+            </label>
+          </fieldset>
+        </div>
+      </div>
+      <div id="businessPhotosPane" class="business-pane hidden">
+        <div id="projectGalleryEditor" class="project-gallery-editor"></div>
+        <input id="bizGallery" type="file" multiple accept="image/*,video/*">
+        <small class="upload-note">Project uploads: max 8MB per file, 20MB total. New uploads are added to the photos shown above.</small>
+      </div>
+      <button id="saveBusinessBtn" type="button" class="primary-btn">Save profile</button>
       <p id="businessMessage" class="form-message"></p>
     </form>
   </dialog>
 
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
-  <script src="/app.js?v=admin-login-fix"></script>
+  <script src="/app.js?v=edit-business-profile"></script>
 </body>
 </html>

@@ -848,6 +848,30 @@ footer {
   color: white;
 }
 
+.business-tab {
+  flex: 1;
+  border: 0;
+  min-height: 42px;
+  background: transparent;
+  color: var(--text);
+  font-weight: 800;
+}
+
+.business-tab.active {
+  background: var(--brand);
+  color: white;
+}
+
+.business-profile-select,
+.business-pane {
+  width: 100%;
+}
+
+.business-pane {
+  display: grid;
+  gap: 12px;
+}
+
 .auth-pane, .business-form-grid {
   display: grid;
   gap: 10px;
@@ -865,6 +889,44 @@ footer {
   grid-column: 1 / -1;
   color: var(--muted);
   font-weight: 800;
+}
+
+.project-gallery-editor {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.project-photo-tile {
+  position: relative;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface-strong);
+}
+
+.project-photo-tile img {
+  display: block;
+  width: 100%;
+  aspect-ratio: 1.25;
+  object-fit: cover;
+}
+
+.project-photo-tile .icon-btn {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  width: 32px;
+  height: 32px;
+  min-height: 32px;
+  background: rgba(0, 0, 0, 0.72);
+  color: #ffffff;
+}
+
+.empty-gallery-note {
+  grid-column: 1 / -1;
+  color: var(--muted);
+  margin: 0;
 }
 
 .verification-docs {
@@ -973,7 +1035,7 @@ footer {
   .hero-section {
     min-height: auto;
   }
-  .onboarding-strip, .business-grid, .review-row, .category-grid, .admin-dashboard, .business-form-grid, .gallery-grid, .verification-docs, .legal-grid {
+  .onboarding-strip, .business-grid, .review-row, .category-grid, .admin-dashboard, .business-form-grid, .gallery-grid, .verification-docs, .legal-grid, .project-gallery-editor {
     grid-template-columns: 1fr;
   }
   .admin-card.wide {

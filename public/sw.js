@@ -1,4 +1,4 @@
-const CACHE = "connect-za-v15-admin-login-fix";
+const CACHE = "connect-za-v16-edit-business-profile";
 const ASSETS = ["/", "/styles.css", "/app.js", "/manifest.webmanifest", "/icons/icon.svg"];
 
 self.addEventListener("install", (event) => {

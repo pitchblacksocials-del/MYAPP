@@ -2,6 +2,8 @@ const state = {
   user: null,
   businesses: [],
   myBusinesses: [],
+  editingBusinessId: "",
+  businessGalleryDraft: [],
   currentBusiness: null,
   conversations: [],
   activeConversation: null,
@@ -201,6 +203,69 @@ function renderPrimePanel() {
     inactive: `Choose Standard for R150/month or PRIME for R250/month.`
   };
   status.textContent = labels[currentStatus] || labels.inactive;
+}
+
+function setBusinessTab(tabName) {
+  $$(".business-tab").forEach((tab) => tab.classList.toggle("active", tab.dataset.businessTab === tabName));
+  $("#businessDetailsPane").classList.toggle("hidden", tabName !== "details");
+  $("#businessPhotosPane").classList.toggle("hidden", tabName !== "photos");
+}
+
+function renderBusinessProfileSelect() {
+  const select = $("#bizProfileSelect");
+  select.innerHTML = `<option value="">Register new business</option>` + state.myBusinesses.map((business) => (
+    `<option value="${business.id}">${business.name}</option>`
+  )).join("");
+  select.value = state.editingBusinessId || "";
+  select.classList.toggle("hidden", !state.myBusinesses.length);
+}
+
+function setFieldValue(id, value = "") {
+  const node = $(`#${id}`);
+  if (node) node.value = value || "";
+}
+
+function renderProjectGalleryEditor() {
+  const node = $("#projectGalleryEditor");
+  if (!node) return;
+  node.innerHTML = state.businessGalleryDraft.map((item, index) => `
+    <article class="project-photo-tile">
+      <img alt="Project photo ${index + 1}" src="${item}">
+      <button type="button" class="icon-btn remove-project-photo" data-index="${index}" title="Remove project photo">x</button>
+    </article>
+  `).join("") || `<p class="empty-gallery-note">No project photos yet. Add completed-work images below.</p>`;
+}
+
+function populateBusinessForm(business = null) {
+  state.editingBusinessId = business?.id || "";
+  state.businessGalleryDraft = Array.isArray(business?.gallery) ? [...business.gallery] : [];
+  $("#businessDialogTitle").textContent = business ? "Edit business profile" : "Register your business";
+  $("#saveBusinessBtn").textContent = business ? "Update profile" : "Submit for approval";
+  $("#businessMessage").textContent = "";
+  setFieldValue("bizName", business?.name);
+  setFieldValue("bizCategory", business?.category);
+  setFieldValue("bizDescription", business?.description);
+  setFieldValue("bizServices", (business?.services || []).join(", "));
+  setFieldValue("bizPhone", business?.phone);
+  setFieldValue("bizEmail", business?.email);
+  setFieldValue("bizWebsite", business?.website);
+  setFieldValue("bizProvince", business?.province);
+  setFieldValue("bizCity", business?.city);
+  setFieldValue("bizAddress", business?.address);
+  setFieldValue("bizHours", business?.hours);
+  setFieldValue("bizPrice", business?.priceRange);
+  $("#bizGallery").value = "";
+  $("#bizProofId").value = "";
+  $("#bizProofAddress").value = "";
+  renderBusinessProfileSelect();
+  renderProjectGalleryEditor();
+}
+
+async function openBusinessProfileDialog() {
+  await loadMyBusinesses();
+  populateBusinessForm(state.myBusinesses[0] || null);
+  setBusinessTab("details");
+  $("#businessDialog").showModal();
 }
 
 function renderCategories() {
@@ -465,7 +530,7 @@ document.addEventListener("click", async (event) => {
         return;
       }
       if (state.user.type !== "business") return toast("Use a business account to create a company profile.");
-      $("#businessDialog").showModal();
+      await openBusinessProfileDialog();
     }
     if (target.matches("[data-category]")) {
       $("#categoryFilter").value = target.dataset.category;
@@ -496,6 +561,13 @@ document.addEventListener("click", async (event) => {
     if (target.classList.contains("conversation-item")) {
       state.activeConversation = state.conversations.find((con) => con.id === target.dataset.id);
       renderConversations();
+    }
+    if (target.classList.contains("remove-project-photo")) {
+      state.businessGalleryDraft.splice(Number(target.dataset.index), 1);
+      renderProjectGalleryEditor();
+    }
+    if (target.classList.contains("business-tab")) {
+      setBusinessTab(target.dataset.businessTab);
     }
     if (target.classList.contains("tab")) {
       $$(".tab").forEach((tab) => tab.classList.toggle("active", tab === target));
@@ -579,49 +651,52 @@ $("#resetBtn").addEventListener("click", async () => {
 
 $("#saveBusinessBtn").addEventListener("click", async () => {
   const button = $("#saveBusinessBtn");
+  const isEditing = Boolean(state.editingBusinessId);
   try {
     if (!state.user) return $("#authDialog").showModal();
     button.disabled = true;
-    button.textContent = "Submitting...";
+    button.textContent = isEditing ? "Updating..." : "Submitting...";
     $("#businessMessage").textContent = "Uploading business details...";
     validateBusinessFiles();
-    const gallery = (await fileInputsToDataUrls($("#bizGallery"))).map((file) => file.data);
+    const uploadedGallery = (await fileInputsToDataUrls($("#bizGallery"))).map((file) => file.data);
     const proofOfId = (await fileInputsToDataUrls($("#bizProofId")))[0];
     const proofOfAddress = (await fileInputsToDataUrls($("#bizProofAddress")))[0];
-    if (!proofOfId || !proofOfAddress) throw new Error("Please upload proof of ID and proof of address.");
-    const { business } = await api("/api/businesses", {
-      method: "POST",
-      body: JSON.stringify({
-        name: $("#bizName").value,
-        category: $("#bizCategory").value,
-        description: $("#bizDescription").value,
-        services: $("#bizServices").value,
-        phone: $("#bizPhone").value,
-        email: $("#bizEmail").value,
-        website: $("#bizWebsite").value,
-        province: $("#bizProvince").value,
-        city: $("#bizCity").value,
-        address: $("#bizAddress").value,
-        hours: $("#bizHours").value,
-        priceRange: $("#bizPrice").value,
-        pricingMode: $("#bizPrice").value || "Request quote",
-        gallery,
-        verificationDocuments: {
-          proofOfId,
-          proofOfAddress,
-          submittedAt: new Date().toISOString()
-        }
-      })
+    if (!isEditing && (!proofOfId || !proofOfAddress)) throw new Error("Please upload proof of ID and proof of address.");
+    const verificationDocuments = {};
+    if (proofOfId) verificationDocuments.proofOfId = proofOfId;
+    if (proofOfAddress) verificationDocuments.proofOfAddress = proofOfAddress;
+    if (proofOfId || proofOfAddress) verificationDocuments.submittedAt = new Date().toISOString();
+    const payload = {
+      name: $("#bizName").value,
+      category: $("#bizCategory").value,
+      description: $("#bizDescription").value,
+      services: $("#bizServices").value,
+      phone: $("#bizPhone").value,
+      email: $("#bizEmail").value,
+      website: $("#bizWebsite").value,
+      province: $("#bizProvince").value,
+      city: $("#bizCity").value,
+      address: $("#bizAddress").value,
+      hours: $("#bizHours").value,
+      priceRange: $("#bizPrice").value,
+      pricingMode: $("#bizPrice").value || "Request quote",
+      gallery: [...state.businessGalleryDraft, ...uploadedGallery].slice(0, 12)
+    };
+    if (Object.keys(verificationDocuments).length) payload.verificationDocuments = verificationDocuments;
+    const { business } = await api(isEditing ? `/api/businesses/${state.editingBusinessId}` : "/api/businesses", {
+      method: isEditing ? "PATCH" : "POST",
+      body: JSON.stringify(payload)
     });
-    $("#businessMessage").textContent = `${business.name} submitted for admin approval.`;
+    $("#businessMessage").textContent = isEditing ? `${business.name} profile updated.` : `${business.name} submitted for admin approval.`;
     state.myBusinesses = [business, ...state.myBusinesses.filter((item) => item.id !== business.id)];
+    populateBusinessForm(business);
     renderPrimePanel();
     await loadBusinesses();
   } catch (error) {
     $("#businessMessage").textContent = error.message;
   } finally {
     button.disabled = false;
-    button.textContent = "Submit for approval";
+    button.textContent = state.editingBusinessId ? "Update profile" : "Submit for approval";
   }
 });
 
@@ -693,6 +768,10 @@ $("#startSubscription").addEventListener("click", async () => {
 
 $("#primeBusinessSelect").addEventListener("input", renderPrimePanel);
 $("#subscriptionPlan").addEventListener("input", renderPrimePanel);
+$("#bizProfileSelect").addEventListener("input", () => {
+  const business = state.myBusinesses.find((item) => item.id === $("#bizProfileSelect").value) || null;
+  populateBusinessForm(business);
+});
 
 $("#refreshAdmin").addEventListener("click", () => renderAdmin().catch((error) => toast(error.message)));
 
