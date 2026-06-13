@@ -35,6 +35,8 @@ html { scroll-behavior: smooth; }
 body {
   margin: 0;
   font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-size: 14px;
+  line-height: 1.42;
   background:
     linear-gradient(180deg, rgba(0, 163, 255, 0.18), transparent 340px),
     var(--bg);
@@ -61,8 +63,8 @@ a {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 16px;
-  padding: 14px clamp(18px, 4vw, 64px);
+  gap: 12px;
+  padding: 10px clamp(14px, 4vw, 54px);
   background: color-mix(in srgb, #55585a 92%, transparent);
   border-bottom: 1px solid var(--line);
   backdrop-filter: blur(18px);
@@ -71,15 +73,15 @@ a {
 .brand {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
   min-width: max-content;
 }
 
 .brand-mark {
   display: inline-grid;
   place-items: center;
-  width: 42px;
-  height: 42px;
+  width: 36px;
+  height: 36px;
   border-radius: 8px;
   background: linear-gradient(135deg, #4f5355, var(--brand));
   color: white;
@@ -89,13 +91,14 @@ a {
 .brand small {
   display: block;
   color: var(--muted);
-  font-size: 0.78rem;
+  font-size: 0.68rem;
 }
 
 .desktop-nav {
   display: flex;
-  gap: 18px;
+  gap: 14px;
   color: #f8fbff;
+  font-size: 0.86rem;
 }
 
 .header-actions, .prime-actions, .filters, .hero-search {
@@ -107,8 +110,9 @@ a {
 .primary-btn, .secondary-btn, .icon-btn, .link-btn {
   border: 1px solid transparent;
   border-radius: 8px;
-  min-height: 42px;
-  padding: 0 16px;
+  min-height: 36px;
+  padding: 0 12px;
+  font-size: 0.88rem;
   font-weight: 800;
 }
 
@@ -125,17 +129,17 @@ a {
 }
 
 .icon-btn {
-  width: 42px;
+  width: 36px;
   padding: 0;
 }
 
 .hero-section {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
-  gap: clamp(28px, 5vw, 70px);
+  gap: clamp(18px, 4vw, 48px);
   align-items: center;
   min-height: auto;
-  padding: clamp(34px, 7vw, 72px) clamp(18px, 5vw, 76px) 34px;
+  padding: clamp(26px, 6vw, 54px) clamp(14px, 5vw, 64px) 26px;
   background:
     linear-gradient(115deg, color-mix(in srgb, var(--brand) 26%, transparent), transparent 45%),
     radial-gradient(circle at 88% 16%, color-mix(in srgb, var(--brand-2) 28%, transparent), transparent 32%),
@@ -148,11 +152,11 @@ a {
 }
 
 .eyebrow {
-  margin: 0 0 10px;
+  margin: 0 0 8px;
   color: var(--brand);
   text-transform: uppercase;
   font-weight: 900;
-  font-size: 0.78rem;
+  font-size: 0.68rem;
   letter-spacing: 0;
 }
 
@@ -161,27 +165,31 @@ h1, h2, h3, p {
 }
 
 h1 {
-  font-size: clamp(2.4rem, 6vw, 5.8rem);
-  line-height: 0.95;
+  font-size: clamp(1.8rem, 4.4vw, 3.9rem);
+  line-height: 1.02;
   max-width: 950px;
-  margin-bottom: 18px;
+  margin-bottom: 12px;
 }
 
 h2 {
-  font-size: clamp(1.7rem, 3vw, 3rem);
-  margin-bottom: 8px;
+  font-size: clamp(1.25rem, 2.2vw, 2.1rem);
+  margin-bottom: 6px;
+}
+
+h3 {
+  font-size: 1rem;
 }
 
 .hero-text {
   max-width: 560px;
   color: #d6e2ea;
-  font-size: 1rem;
-  line-height: 1.5;
+  font-size: 0.9rem;
+  line-height: 1.42;
 }
 
 .hero-search {
   width: min(100%, 980px);
-  padding: 10px;
+  padding: 8px;
   background: #55585a;
   border: 1px solid var(--line);
   border-radius: 8px;
@@ -190,30 +198,31 @@ h2 {
 
 input, select, textarea {
   width: 100%;
-  min-height: 42px;
+  min-height: 36px;
   border: 1px solid var(--line);
   border-radius: 8px;
   background: var(--surface);
   color: var(--text);
-  padding: 10px 12px;
+  padding: 8px 10px;
+  font-size: 0.88rem;
 }
 
 textarea {
-  min-height: 110px;
+  min-height: 92px;
   resize: vertical;
 }
 
 .hero-stats {
   display: flex;
   flex-wrap: wrap;
-  gap: 18px;
-  margin-top: 22px;
+  gap: 12px;
+  margin-top: 16px;
   color: #d6e2ea;
 }
 
 .hero-stats strong {
   color: #ffffff;
-  font-size: 1.2rem;
+  font-size: 1rem;
 }
 
 .hero-panel {
@@ -268,7 +277,7 @@ textarea {
   position: absolute;
   left: 28px;
   right: 28px;
-  padding: 14px;
+  padding: 10px;
   border-radius: 8px;
   background: color-mix(in srgb, var(--surface) 94%, transparent);
   box-shadow: var(--shadow);
@@ -287,10 +296,10 @@ textarea {
   display: inline-flex;
   align-items: center;
   width: fit-content;
-  min-height: 24px;
+  min-height: 20px;
   border-radius: 999px;
-  padding: 2px 10px;
-  font-size: 0.74rem;
+  padding: 2px 8px;
+  font-size: 0.66rem;
   font-weight: 900;
 }
 
@@ -327,38 +336,38 @@ textarea {
 
 .onboarding-strip article {
   background: var(--surface);
-  padding: 22px;
+  padding: 16px;
 }
 
 .onboarding-strip span {
   display: inline-grid;
   place-items: center;
-  width: 32px;
-  height: 32px;
+  width: 28px;
+  height: 28px;
   border-radius: 8px;
   background: var(--surface-strong);
   color: var(--brand);
   font-weight: 900;
-  margin-bottom: 12px;
+  margin-bottom: 8px;
 }
 
 .section, .workspace-section, .admin-section, .prime-section, .profile-section, footer {
-  padding: 64px clamp(18px, 5vw, 76px);
+  padding: 42px clamp(14px, 5vw, 64px);
 }
 
 .section-heading {
   display: flex;
   justify-content: space-between;
-  gap: 18px;
+  gap: 12px;
   align-items: end;
-  margin-bottom: 22px;
+  margin-bottom: 14px;
 }
 
 .category-grid {
   display: grid;
-  grid-template-columns: repeat(6, minmax(120px, 1fr));
-  gap: 12px;
-  margin-bottom: 18px;
+  grid-template-columns: repeat(auto-fit, minmax(104px, 1fr));
+  gap: 8px;
+  margin-bottom: 14px;
 }
 
 .category-tile, .business-card, .chat-panel, .quote-panel, .conversation-list, .admin-card, .profile-card, blockquote {
@@ -369,27 +378,35 @@ textarea {
 }
 
 .category-tile {
-  min-height: 96px;
-  padding: 16px;
+  min-height: 70px;
+  padding: 10px;
   text-align: left;
   color: #ffffff;
 }
 
 .category-tile span {
-  display: block;
-  font-size: 1.45rem;
-  margin-bottom: 8px;
+  display: inline-grid;
+  place-items: center;
+  min-width: 34px;
+  min-height: 22px;
+  margin-bottom: 7px;
+  padding: 2px 6px;
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--brand) 18%, var(--surface-strong));
+  color: #ffffff;
+  font-size: 0.68rem;
+  font-weight: 900;
 }
 
 .filters {
-  margin-bottom: 18px;
+  margin-bottom: 14px;
   align-items: stretch;
 }
 
 .business-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 18px;
+  gap: 12px;
 }
 
 .business-card {
@@ -402,21 +419,21 @@ textarea {
 
 .business-card.prime {
   border-color: color-mix(in srgb, var(--brand) 70%, var(--line));
-  box-shadow: 0 18px 48px color-mix(in srgb, var(--brand) 22%, transparent);
+  box-shadow: 0 12px 34px color-mix(in srgb, var(--brand) 20%, transparent);
 }
 
 .card-media {
-  height: 172px;
+  height: 132px;
   background: linear-gradient(135deg, var(--surface-strong), color-mix(in srgb, var(--brand) 24%, var(--surface)));
   background-size: cover;
   background-position: center;
 }
 
 .card-body {
-  padding: 16px;
+  padding: 12px;
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 8px;
   flex: 1;
   color: #ffffff;
 }
@@ -428,26 +445,32 @@ textarea {
   color: #ffffff;
 }
 
+.category-tile strong {
+  display: block;
+  font-size: 0.82rem;
+  line-height: 1.15;
+}
+
 .card-title-row {
   display: flex;
   justify-content: space-between;
-  gap: 12px;
+  gap: 8px;
   align-items: flex-start;
 }
 
 .meta-line, .service-tags, .card-actions {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
+  gap: 6px;
   align-items: center;
 }
 
 .service-tags span {
-  padding: 5px 9px;
+  padding: 4px 8px;
   border-radius: 999px;
   background: var(--surface-strong);
   color: var(--muted);
-  font-size: 0.82rem;
+  font-size: 0.74rem;
 }
 
 .card-actions {
@@ -464,7 +487,7 @@ textarea {
 .prime-section {
   display: flex;
   justify-content: space-between;
-  gap: 24px;
+  gap: 16px;
   align-items: center;
   background: linear-gradient(120deg, #55585a, #00a3ff);
   color: white;
@@ -476,7 +499,7 @@ textarea {
 
 .prime-actions {
   min-width: min(100%, 480px);
-  padding: 16px;
+  padding: 12px;
   background: rgba(255, 255, 255, 0.12);
   border-radius: 8px;
   border: 1px solid rgba(255, 255, 255, 0.18);
@@ -484,7 +507,7 @@ textarea {
 }
 
 .prime-actions select {
-  flex: 1 1 190px;
+  flex: 1 1 170px;
 }
 
 .prime-status-text {
@@ -495,7 +518,7 @@ textarea {
 }
 
 .toggle-row {
-  min-width: 130px;
+  min-width: 118px;
   display: flex;
   align-items: center;
   gap: 8px;
@@ -514,7 +537,7 @@ textarea {
 }
 
 .profile-cover {
-  height: 260px;
+  height: 210px;
   background-size: cover;
   background-position: center;
   background-color: var(--surface-strong);
@@ -523,29 +546,29 @@ textarea {
 .profile-content {
   display: grid;
   grid-template-columns: 1.4fr 0.6fr;
-  gap: 24px;
-  padding: 24px;
+  gap: 16px;
+  padding: 18px;
 }
 
 .profile-logo {
   display: inline-grid;
   place-items: center;
-  width: 82px;
-  height: 82px;
+  width: 66px;
+  height: 66px;
   border-radius: 8px;
   background: var(--brand);
   color: white;
   font-weight: 900;
-  font-size: 1.6rem;
-  margin-top: -66px;
-  border: 5px solid #55585a;
+  font-size: 1.25rem;
+  margin-top: -52px;
+  border: 4px solid #55585a;
 }
 
 .gallery-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 10px;
-  margin-top: 16px;
+  gap: 8px;
+  margin-top: 12px;
 }
 
 .gallery-grid img {
@@ -557,16 +580,16 @@ textarea {
 
 .workspace-grid {
   display: grid;
-  grid-template-columns: 260px minmax(0, 1fr) 330px;
-  gap: 16px;
+  grid-template-columns: 230px minmax(0, 1fr) 290px;
+  gap: 12px;
 }
 
 .conversation-list, .chat-panel, .quote-panel {
-  min-height: 460px;
+  min-height: 390px;
 }
 
 .conversation-list {
-  padding: 12px;
+  padding: 10px;
 }
 
 .conversation-item {
@@ -576,7 +599,7 @@ textarea {
   border-radius: 8px;
   background: transparent;
   color: var(--text);
-  padding: 12px;
+  padding: 10px;
 }
 
 .conversation-item.active, .conversation-item:hover {
@@ -590,22 +613,22 @@ textarea {
 }
 
 .chat-header {
-  padding: 16px;
+  padding: 12px;
   border-bottom: 1px solid var(--line);
   font-weight: 900;
 }
 
 .chat-messages {
-  padding: 16px;
+  padding: 12px;
   overflow: auto;
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 8px;
 }
 
 .message {
   max-width: 76%;
-  padding: 10px 12px;
+  padding: 8px 10px;
   border-radius: 8px;
   background: var(--surface-strong);
 }
@@ -618,29 +641,29 @@ textarea {
 
 .chat-form {
   display: grid;
-  grid-template-columns: 110px 1fr auto;
-  gap: 10px;
-  padding: 12px;
+  grid-template-columns: 96px 1fr auto;
+  gap: 8px;
+  padding: 10px;
   border-top: 1px solid var(--line);
 }
 
 .quote-panel {
-  padding: 16px;
+  padding: 12px;
 }
 
 .quote-panel form {
   display: grid;
-  gap: 10px;
+  gap: 8px;
 }
 
 .quote-list {
   display: grid;
-  gap: 10px;
-  margin-top: 16px;
+  gap: 8px;
+  margin-top: 12px;
 }
 
 .quote-item {
-  padding: 12px;
+  padding: 10px;
   background: var(--surface-strong);
   border-radius: 8px;
 }
@@ -648,19 +671,19 @@ textarea {
 .review-row {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 16px;
+  gap: 12px;
 }
 
 blockquote {
   margin: 0;
-  padding: 22px;
+  padding: 16px;
   color: var(--text);
-  line-height: 1.55;
+  line-height: 1.45;
 }
 
 blockquote span {
   display: block;
-  margin-top: 14px;
+  margin-top: 10px;
   color: var(--muted);
   font-weight: 800;
 }
@@ -668,11 +691,11 @@ blockquote span {
 .admin-dashboard {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 16px;
+  gap: 12px;
 }
 
 .admin-card {
-  padding: 16px;
+  padding: 12px;
 }
 
 .admin-card.wide {
@@ -681,15 +704,15 @@ blockquote span {
 
 .admin-list {
   display: grid;
-  gap: 10px;
+  gap: 8px;
   max-height: 360px;
   overflow: auto;
 }
 
 .admin-row {
   display: grid;
-  gap: 8px;
-  padding: 12px;
+  gap: 6px;
+  padding: 10px;
   border-radius: 8px;
   background: var(--surface-strong);
 }
@@ -697,7 +720,7 @@ blockquote span {
 .admin-row-actions {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
+  gap: 6px;
 }
 
 footer {
@@ -707,7 +730,9 @@ footer {
 
 .legal-footer {
   display: grid;
-  gap: 24px;
+  gap: 12px;
+  padding-top: 26px;
+  padding-bottom: 26px;
   background:
     linear-gradient(135deg, rgba(0, 163, 255, 0.16), transparent 38%),
     var(--bg);
@@ -716,80 +741,93 @@ footer {
 .footer-brand {
   display: flex;
   justify-content: space-between;
-  gap: 18px;
+  gap: 10px;
   flex-wrap: wrap;
   align-items: center;
 }
 
 .footer-brand strong {
   color: #ffffff;
-  font-size: 1.15rem;
+  font-size: 0.98rem;
 }
 
 .footer-brand span {
   color: var(--muted);
+  font-size: 0.82rem;
 }
 
-.legal-grid {
+.legal-links {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 14px;
+  grid-template-columns: repeat(auto-fit, minmax(132px, 1fr));
+  gap: 6px;
 }
 
-.legal-card {
+.legal-links a {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 28px;
+  padding: 5px 8px;
+  border: 1px solid rgba(0, 163, 255, 0.36);
+  border-radius: 8px;
+  background: rgba(0, 163, 255, 0.12);
+  color: #ffffff;
+  font-size: 0.72rem;
+  font-weight: 800;
+  line-height: 1.15;
+  text-align: center;
+  text-decoration: none;
+}
+
+.legal-links a:hover {
+  background: rgba(0, 163, 255, 0.22);
+  border-color: var(--brand);
+}
+
+.legal-page {
   display: grid;
-  align-content: start;
-  gap: 10px;
-  padding: 16px;
+  gap: 12px;
+  padding: 34px clamp(14px, 5vw, 64px) 48px;
+}
+
+.legal-doc {
+  max-width: 980px;
+  padding: 18px;
   border: 1px solid var(--line);
   border-radius: 8px;
   background: var(--surface);
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.22);
 }
 
-.legal-card h3 {
-  margin: 0;
-  color: #ffffff;
-  font-size: 1rem;
+.legal-doc h1 {
+  font-size: clamp(1.5rem, 3vw, 2.4rem);
 }
 
-.legal-card p,
-.legal-card li {
+.legal-doc p {
   color: var(--muted);
-  font-size: 0.92rem;
-  line-height: 1.55;
 }
 
-.legal-card p,
-.legal-card ul {
-  margin: 0;
-}
-
-.legal-card ul {
-  padding-left: 18px;
-}
-
-.legal-card a {
-  color: var(--brand);
+.legal-doc a {
+  color: var(--brand-2);
   font-weight: 900;
 }
 
-.legal-links {
+.legal-resource-links {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
 }
 
-.legal-links a {
+.legal-resource-links a {
   display: inline-flex;
   align-items: center;
-  min-height: 36px;
-  padding: 8px 10px;
+  min-height: 30px;
+  padding: 5px 8px;
   border: 1px solid rgba(0, 163, 255, 0.36);
   border-radius: 8px;
   background: rgba(0, 163, 255, 0.12);
   color: #ffffff;
-  text-decoration: none;
+  font-size: 0.76rem;
 }
 
 .modal {
@@ -806,25 +844,25 @@ footer {
 .modal-card {
   position: relative;
   display: grid;
-  gap: 14px;
+  gap: 10px;
   background: var(--surface);
   border: 1px solid var(--line);
   border-radius: 8px;
-  padding: 24px;
+  padding: 18px;
   box-shadow: var(--shadow);
 }
 
 .close-btn {
   position: absolute;
-  top: 12px;
-  right: 12px;
-  width: 36px;
-  height: 36px;
+  top: 10px;
+  right: 10px;
+  width: 32px;
+  height: 32px;
   border-radius: 8px;
   border: 1px solid var(--line);
   background: var(--surface);
   color: var(--text);
-  font-size: 1.4rem;
+  font-size: 1.1rem;
 }
 
 .tabs {
@@ -837,7 +875,7 @@ footer {
 .tab {
   flex: 1;
   border: 0;
-  min-height: 42px;
+  min-height: 36px;
   background: transparent;
   color: var(--text);
   font-weight: 800;
@@ -851,7 +889,7 @@ footer {
 .business-tab {
   flex: 1;
   border: 0;
-  min-height: 42px;
+  min-height: 36px;
   background: transparent;
   color: var(--text);
   font-weight: 800;
@@ -869,12 +907,12 @@ footer {
 
 .business-pane {
   display: grid;
-  gap: 12px;
+  gap: 8px;
 }
 
 .auth-pane, .business-form-grid {
   display: grid;
-  gap: 10px;
+  gap: 8px;
 }
 
 .business-form-grid {
@@ -894,7 +932,7 @@ footer {
 .project-gallery-editor {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 10px;
+  gap: 8px;
 }
 
 .project-photo-tile {
@@ -914,11 +952,11 @@ footer {
 
 .project-photo-tile .icon-btn {
   position: absolute;
-  top: 8px;
-  right: 8px;
-  width: 32px;
-  height: 32px;
-  min-height: 32px;
+  top: 6px;
+  right: 6px;
+  width: 28px;
+  height: 28px;
+  min-height: 28px;
   background: rgba(0, 0, 0, 0.72);
   color: #ffffff;
 }
@@ -933,23 +971,23 @@ footer {
   grid-column: 1 / -1;
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 10px;
+  gap: 8px;
   margin: 0;
-  padding: 14px;
+  padding: 10px;
   border: 1px solid var(--line);
   border-radius: 8px;
   background: var(--surface-strong);
 }
 
 .verification-docs legend {
-  padding: 0 8px;
+  padding: 0 6px;
   color: #ffffff;
   font-weight: 900;
 }
 
 .verification-docs label {
   display: grid;
-  gap: 8px;
+  gap: 6px;
   color: #ffffff;
   font-weight: 800;
 }
@@ -959,7 +997,7 @@ footer {
 }
 
 .form-message {
-  min-height: 22px;
+  min-height: 18px;
   color: var(--muted);
   margin: 0;
 }
@@ -971,7 +1009,7 @@ footer {
   z-index: 40;
   display: none;
   max-width: min(420px, calc(100vw - 36px));
-  padding: 14px 16px;
+  padding: 10px 12px;
   background: #4f5355;
   color: white;
   border-radius: 8px;
@@ -990,7 +1028,7 @@ footer {
   display: grid;
   place-items: center;
   min-height: 100vh;
-  padding: 24px;
+  padding: 18px;
 }
 
 .success-card {
@@ -998,10 +1036,10 @@ footer {
   background: var(--surface);
   border: 1px solid var(--line);
   border-radius: 8px;
-  padding: 28px;
+  padding: 20px;
   box-shadow: var(--shadow);
   display: grid;
-  gap: 14px;
+  gap: 10px;
 }
 
 @media (max-width: 1100px) {
@@ -1009,14 +1047,11 @@ footer {
   .hero-section, .profile-content, .workspace-grid {
     grid-template-columns: 1fr;
   }
-  .legal-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
   .business-grid, .review-row {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
   .category-grid {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(96px, 1fr));
   }
   .admin-dashboard {
     grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -1035,8 +1070,11 @@ footer {
   .hero-section {
     min-height: auto;
   }
-  .onboarding-strip, .business-grid, .review-row, .category-grid, .admin-dashboard, .business-form-grid, .gallery-grid, .verification-docs, .legal-grid, .project-gallery-editor {
+  .onboarding-strip, .business-grid, .review-row, .admin-dashboard, .business-form-grid, .gallery-grid, .verification-docs, .project-gallery-editor {
     grid-template-columns: 1fr;
+  }
+  .category-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
   }
   .admin-card.wide {
     grid-column: auto;

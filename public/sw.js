@@ -1,5 +1,5 @@
-const CACHE = "connect-za-v16-edit-business-profile";
-const ASSETS = ["/", "/styles.css", "/app.js", "/manifest.webmanifest", "/icons/icon.svg"];
+const CACHE = "connect-za-v18-compact-categories-legal";
+const ASSETS = ["/", "/styles.css", "/app.js", "/legal.html", "/manifest.webmanifest", "/icons/icon.svg"];
 
 self.addEventListener("install", (event) => {
   event.waitUntil(caches.open(CACHE).then((cache) => cache.addAll(ASSETS)));

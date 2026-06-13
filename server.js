@@ -65,7 +65,31 @@ const categories = [
   "IT",
   "Solar",
   "Landscaping",
-  "Catering"
+  "Catering",
+  "Roofing",
+  "Painting",
+  "Tiling",
+  "Carpentry",
+  "Welding",
+  "HVAC",
+  "Pest Control",
+  "Moving",
+  "Events",
+  "Education",
+  "Healthcare",
+  "Legal Services",
+  "Accounting",
+  "Real Estate",
+  "Agriculture",
+  "Manufacturing",
+  "Retail",
+  "Marketing",
+  "Photography",
+  "Pet Services",
+  "Home Repairs",
+  "Appliance Repairs",
+  "CCTV",
+  "Fibre Internet"
 ];
 
 const provinces = [

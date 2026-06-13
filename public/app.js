@@ -270,22 +270,46 @@ async function openBusinessProfileDialog() {
 
 function renderCategories() {
   const icons = {
-    Construction: "▦",
-    Plumbing: "◌",
-    Electrical: "ϟ",
-    Security: "▣",
-    Automotive: "◈",
-    Beauty: "✦",
-    Cleaning: "◇",
-    Logistics: "⇄",
+    Construction: "BLD",
+    Plumbing: "PLM",
+    Electrical: "ELC",
+    Security: "SEC",
+    Automotive: "CAR",
+    Beauty: "BTY",
+    Cleaning: "CLN",
+    Logistics: "LOG",
     IT: "</>",
-    Solar: "☼",
-    Landscaping: "♧",
-    Catering: "◒"
+    Solar: "SOL",
+    Landscaping: "LND",
+    Catering: "CAT",
+    Roofing: "ROF",
+    Painting: "PNT",
+    Tiling: "TIL",
+    Carpentry: "CRP",
+    Welding: "WLD",
+    HVAC: "AIR",
+    "Pest Control": "PST",
+    Moving: "MOV",
+    Events: "EVT",
+    Education: "EDU",
+    Healthcare: "MED",
+    "Legal Services": "LAW",
+    Accounting: "ACC",
+    "Real Estate": "EST",
+    Agriculture: "AGR",
+    Manufacturing: "MFG",
+    Retail: "RTL",
+    Marketing: "MKT",
+    Photography: "PHO",
+    "Pet Services": "PET",
+    "Home Repairs": "FIX",
+    "Appliance Repairs": "APP",
+    CCTV: "CCTV",
+    "Fibre Internet": "NET"
   };
   $("#categoryGrid").innerHTML = state.meta.categories.map((category) => `
     <button class="category-tile" data-category="${category}">
-      <span>${icons[category] || "◆"}</span>
+      <span>${icons[category] || "ZA"}</span>
       <strong>${category}</strong>
     </button>
   `).join("");
