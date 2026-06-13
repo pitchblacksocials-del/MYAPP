@@ -10,11 +10,16 @@ npm start
 
 Open `http://localhost:3000`.
 
-Demo logins:
+For a fresh database, create the first admin by setting these environment variables before starting the server:
 
-- Admin: `admin@connect-za.local` / `Admin123!`
-- Customer: `customer@connect-za.local` / `Customer123!`
-- Business: `business@connect-za.local` / `Business123!`
+```env
+ADMIN_EMAIL=admin@your-domain.co.za
+ADMIN_PASSWORD=replace-with-a-strong-password
+ADMIN_NAME=Connect-ZA Admin
+ADMIN_PHONE=+27000000000
+```
+
+Customers and businesses can register through the live app.
 
 ## Connect Supabase
 
@@ -38,6 +43,8 @@ npm start
 ```
 
 Replace `[YOUR-PASSWORD]` with the database password from Supabase. If the password contains special characters, URL-encode it first. The app reports the active storage provider from `/api/meta` as `supabase-postgres` when the direct connection is configured. If credentials are missing, it safely falls back to `data/db.json`.
+
+On Render, use Supabase's transaction pooler URL for `SUPABASE_DATABASE_URL`.
 
 You can also connect through Supabase REST instead by setting `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY`.
 

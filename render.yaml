@@ -6,7 +6,17 @@ services:
     startCommand: npm start
     healthCheckPath: /health
     envVars:
+      - key: SUPABASE_DATABASE_URL
+        sync: false
       - key: SUPABASE_STATE_TABLE
         value: connect_za_state
       - key: SUPABASE_STATE_ID
         value: production
+      - key: ADMIN_EMAIL
+        sync: false
+      - key: ADMIN_PASSWORD
+        sync: false
+      - key: ADMIN_NAME
+        value: Connect-ZA Admin
+      - key: ADMIN_PHONE
+        sync: false

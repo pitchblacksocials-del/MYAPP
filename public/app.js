@@ -277,7 +277,7 @@ async function fileInputsToDataUrls(input) {
 
 async function renderAdmin() {
   if (state.user?.type !== "admin") {
-    $("#adminDashboard").innerHTML = `<div class="admin-card wide"><h3>Admin access</h3><p>Sign in as admin@connect-za.local to manage users, approvals, PRIME, revenue, reports, ads, and push notifications.</p></div>`;
+    $("#adminDashboard").innerHTML = `<div class="admin-card wide"><h3>Admin access</h3><p>Sign in with an administrator account to manage users, approvals, PRIME, revenue, reports, ads, and push notifications.</p></div>`;
     return;
   }
   const data = await api("/api/admin");
@@ -433,7 +433,7 @@ $("#loginBtn").addEventListener("click", async () => {
 
 $("#registerBtn").addEventListener("click", async () => {
   try {
-    const { user, otpDevCode } = await api("/api/auth/register", {
+    const { user } = await api("/api/auth/register", {
       method: "POST",
       body: JSON.stringify({
         name: $("#registerName").value,
@@ -444,7 +444,7 @@ $("#registerBtn").addEventListener("click", async () => {
       })
     });
     state.user = user;
-    $("#authMessage").textContent = `Account created. Demo OTP: ${otpDevCode}`;
+    $("#authMessage").textContent = "Account created. Phone verification is pending.";
     renderUser();
   } catch (error) {
     $("#authMessage").textContent = error.message;

@@ -182,214 +182,90 @@ function makeSession(userId) {
   };
 }
 
+const demoUserEmails = new Set(["admin@connect-za.local", "customer@connect-za.local", "business@connect-za.local"]);
+const demoBusinessNames = new Set([
+  "Mzansi Build & Renovate",
+  "Cape Circuit Pros",
+  "Durban Shield Security",
+  "Pretoria Cloud Clinic"
+]);
+
+function removeDemoData(db) {
+  let changed = false;
+  const demoUserIds = new Set((db.users || [])
+    .filter((user) => demoUserEmails.has(String(user.email || "").toLowerCase()))
+    .map((user) => user.id));
+  const demoBusinessIds = new Set((db.businesses || [])
+    .filter((business) => demoBusinessNames.has(business.name))
+    .map((business) => business.id));
+
+  const filterList = (list, predicate) => {
+    const originalLength = list.length;
+    const filtered = list.filter(predicate);
+    if (filtered.length !== originalLength) changed = true;
+    return filtered;
+  };
+
+  db.users = filterList(db.users || [], (user) => !demoUserIds.has(user.id));
+  db.businesses = filterList(db.businesses || [], (business) => !demoBusinessIds.has(business.id));
+  db.reviews = filterList(db.reviews || [], (review) => !demoBusinessIds.has(review.businessId) && !demoUserIds.has(review.userId));
+  db.quotes = filterList(db.quotes || [], (quote) => !demoBusinessIds.has(quote.businessId) && !demoUserIds.has(quote.customerId));
+  db.conversations = filterList(db.conversations || [], (conversation) => !demoBusinessIds.has(conversation.businessId) && !demoUserIds.has(conversation.customerId));
+  db.sessions = filterList(db.sessions || [], (session) => !demoUserIds.has(session.userId));
+  db.ads = filterList(db.ads || [], (ad) => ad.title !== "Winter solar installation deals");
+  db.notifications = filterList(db.notifications || [], (notification) => !demoUserIds.has(notification.userId) && !demoBusinessNames.has(String(notification.text || "").replace(" needs approval", "")));
+
+  db.analytics ||= {};
+  db.analytics.primeSubscribers = (db.businesses || []).filter((business) => business.primeStatus === "active").length;
+  db.analytics.quoteRequests = (db.quotes || []).length;
+  db.analytics.revenue = db.analytics.primeSubscribers * 250;
+  db.analytics.monthlyVisitors ||= 0;
+  return changed;
+}
+
+function bootstrapUsers() {
+  if (!process.env.ADMIN_EMAIL || !process.env.ADMIN_PASSWORD) return [];
+  const email = process.env.ADMIN_EMAIL.toLowerCase();
+  return [
+    {
+      id: uid("usr"),
+      type: "admin",
+      name: process.env.ADMIN_NAME || "Connect-ZA Admin",
+      email,
+      phone: process.env.ADMIN_PHONE || "",
+      passwordHash: hashPassword(process.env.ADMIN_PASSWORD),
+      phoneVerified: true,
+      createdAt: new Date().toISOString(),
+      savedBusinesses: []
+    }
+  ];
+}
+
+function ensureBootstrapAdmin(db) {
+  const users = bootstrapUsers();
+  if (!users.length) return false;
+  db.users ||= [];
+  if (db.users.some((user) => String(user.email || "").toLowerCase() === users[0].email)) return false;
+  db.users.push(users[0]);
+  return true;
+}
+
 function seedDb() {
-  const adminId = uid("usr");
-  const customerId = uid("usr");
-  const businessOwnerId = uid("usr");
-  const biz1 = uid("biz");
-  const biz2 = uid("biz");
-  const biz3 = uid("biz");
-  const biz4 = uid("biz");
   return {
-    users: [
-      {
-        id: adminId,
-        type: "admin",
-        name: "Connect-ZA Admin",
-        email: "admin@connect-za.local",
-        phone: "+27821234567",
-        passwordHash: hashPassword("Admin123!"),
-        phoneVerified: true,
-        createdAt: new Date().toISOString(),
-        savedBusinesses: []
-      },
-      {
-        id: customerId,
-        type: "customer",
-        name: "Thando Mokoena",
-        email: "customer@connect-za.local",
-        phone: "+27831234567",
-        passwordHash: hashPassword("Customer123!"),
-        phoneVerified: true,
-        createdAt: new Date().toISOString(),
-        savedBusinesses: [biz1],
-        city: "Johannesburg",
-        province: "Gauteng"
-      },
-      {
-        id: businessOwnerId,
-        type: "business",
-        name: "Aisha Naidoo",
-        email: "business@connect-za.local",
-        phone: "+27721234567",
-        passwordHash: hashPassword("Business123!"),
-        phoneVerified: true,
-        createdAt: new Date().toISOString(),
-        savedBusinesses: []
-      }
-    ],
+    users: bootstrapUsers(),
     otp: [],
     sessions: [],
-    businesses: [
-      {
-        id: biz1,
-        ownerId: businessOwnerId,
-        status: "approved",
-        primeStatus: "active",
-        subscription: { gateway: "Stripe", amount: 250, autoRenew: true, nextBillingDate: "2026-07-11" },
-        verified: true,
-        name: "Mzansi Build & Renovate",
-        category: "Construction",
-        services: ["Home renovations", "Tiling", "Roof repairs", "Project management"],
-        description: "Reliable residential and commercial renovations with documented workmanship and transparent quote timelines.",
-        province: "Gauteng",
-        city: "Johannesburg",
-        address: "88 Commissioner Street, Johannesburg",
-        phone: "+27821230001",
-        email: "hello@mzansibuild.co.za",
-        website: "https://mzansibuild.example",
-        socials: ["https://facebook.com/mzansibuild", "https://instagram.com/mzansibuild"],
-        logo: "",
-        cover: "",
-        hours: "Mon-Fri 07:00-17:30, Sat 08:00-13:00",
-        pricingMode: "Request quote",
-        priceRange: "R1,500 - R250,000",
-        rating: 4.9,
-        reviewCount: 42,
-        lat: -26.2041,
-        lng: 28.0473,
-        gallery: [
-          "https://images.unsplash.com/photo-1503387762-592deb58ef4e?auto=format&fit=crop&w=900&q=80",
-          "https://images.unsplash.com/photo-1486406146926-c627a92ad1ab?auto=format&fit=crop&w=900&q=80",
-          "https://images.unsplash.com/photo-1600585154340-be6161a56a0c?auto=format&fit=crop&w=900&q=80"
-        ],
-        createdAt: "2026-06-01T09:00:00.000Z"
-      },
-      {
-        id: biz2,
-        ownerId: uid("usr"),
-        status: "approved",
-        primeStatus: "active",
-        subscription: { gateway: "PayFast", amount: 250, autoRenew: true, nextBillingDate: "2026-07-04" },
-        verified: true,
-        name: "Cape Circuit Pros",
-        category: "Electrical",
-        services: ["Coc certificates", "Solar inverter installs", "Fault finding", "Emergency repairs"],
-        description: "Certified electricians serving homes, estates, and SMEs across the Western Cape.",
-        province: "Western Cape",
-        city: "Cape Town",
-        address: "15 Bree Street, Cape Town",
-        phone: "+27821230002",
-        email: "bookings@capecircuit.example",
-        website: "https://capecircuit.example",
-        socials: ["https://linkedin.com/company/capecircuit"],
-        logo: "",
-        cover: "",
-        hours: "Daily 06:00-22:00",
-        pricingMode: "From R650 call-out",
-        priceRange: "R650 - R80,000",
-        rating: 4.8,
-        reviewCount: 31,
-        lat: -33.9249,
-        lng: 18.4241,
-        gallery: [
-          "https://images.unsplash.com/photo-1621905252507-b35492cc74b4?auto=format&fit=crop&w=900&q=80",
-          "https://images.unsplash.com/photo-1509391366360-2e959784a276?auto=format&fit=crop&w=900&q=80"
-        ],
-        createdAt: "2026-06-05T10:30:00.000Z"
-      },
-      {
-        id: biz3,
-        ownerId: uid("usr"),
-        status: "approved",
-        primeStatus: "inactive",
-        subscription: null,
-        verified: false,
-        name: "Durban Shield Security",
-        category: "Security",
-        services: ["CCTV", "Access control", "Armed response consulting", "Alarm installation"],
-        description: "Security technology specialists for retail, warehouses, complexes, and private homes.",
-        province: "KwaZulu-Natal",
-        city: "Durban",
-        address: "44 Florida Road, Durban",
-        phone: "+27821230003",
-        email: "ops@durbanshield.example",
-        website: "https://durbansecurity.example",
-        socials: [],
-        logo: "",
-        cover: "",
-        hours: "24/7 emergency support",
-        pricingMode: "Request quote",
-        priceRange: "R950 - R120,000",
-        rating: 4.6,
-        reviewCount: 18,
-        lat: -29.8587,
-        lng: 31.0218,
-        gallery: [
-          "https://images.unsplash.com/photo-1558002038-1055907df827?auto=format&fit=crop&w=900&q=80",
-          "https://images.unsplash.com/photo-1581090464777-f3220bbe1b8b?auto=format&fit=crop&w=900&q=80"
-        ],
-        createdAt: "2026-06-08T12:00:00.000Z"
-      },
-      {
-        id: biz4,
-        ownerId: uid("usr"),
-        status: "pending",
-        primeStatus: "pending",
-        subscription: { gateway: "Yoco", amount: 250, autoRenew: false, nextBillingDate: null },
-        verified: false,
-        name: "Pretoria Cloud Clinic",
-        category: "IT",
-        services: ["Managed IT", "Cybersecurity audits", "Cloud migration", "POS support"],
-        description: "IT support for professional practices and growing retail businesses.",
-        province: "Gauteng",
-        city: "Pretoria",
-        address: "210 Lynnwood Road, Pretoria",
-        phone: "+27821230004",
-        email: "support@cloudclinic.example",
-        website: "https://cloudclinic.example",
-        socials: ["https://x.com/cloudclinic"],
-        logo: "",
-        cover: "",
-        hours: "Mon-Fri 08:00-18:00",
-        pricingMode: "From R499/month",
-        priceRange: "R499 - R45,000",
-        rating: 4.7,
-        reviewCount: 11,
-        lat: -25.7479,
-        lng: 28.2293,
-        gallery: [
-          "https://images.unsplash.com/photo-1497366754035-f200968a6e72?auto=format&fit=crop&w=900&q=80"
-        ],
-        createdAt: "2026-06-10T08:20:00.000Z"
-      }
-    ],
-    reviews: [
-      { id: uid("rev"), businessId: biz1, userId: customerId, rating: 5, text: "Professional team, clean finish, and the quote stayed accurate.", verified: true, response: "Thank you, Thando. It was a pleasure.", createdAt: "2026-06-06T14:00:00.000Z" },
-      { id: uid("rev"), businessId: biz2, userId: customerId, rating: 5, text: "Fast COC turnaround and great communication.", verified: true, response: "", createdAt: "2026-06-09T10:15:00.000Z" }
-    ],
+    businesses: [],
+    reviews: [],
     quotes: [],
-    conversations: [
-      {
-        id: uid("con"),
-        businessId: biz1,
-        customerId,
-        messages: [
-          { id: uid("msg"), senderId: customerId, type: "text", text: "Hi, can you quote on a bathroom renovation in Sandton?", createdAt: new Date(Date.now() - 3600000).toISOString(), read: true },
-          { id: uid("msg"), senderId: businessOwnerId, type: "text", text: "Absolutely. Please send photos and the rough size of the bathroom.", createdAt: new Date(Date.now() - 3000000).toISOString(), read: false }
-        ],
-        updatedAt: new Date(Date.now() - 3000000).toISOString()
-      }
-    ],
+    conversations: [],
     notifications: [],
-    ads: [
-      { id: uid("ad"), title: "Winter solar installation deals", placement: "homepage", active: true, clicks: 128, impressions: 2700 }
-    ],
+    ads: [],
     analytics: {
-      revenue: 750,
-      primeSubscribers: 3,
+      revenue: 0,
+      primeSubscribers: 0,
       quoteRequests: 0,
-      monthlyVisitors: 18420
+      monthlyVisitors: 0
     },
     settings: {
       slogan: "Connecting Professionals",
@@ -449,7 +325,11 @@ async function readDb() {
       const table = sqlIdentifier(SUPABASE_STATE_TABLE);
       const result = await pgPool.query(`select data from public.${table} where id = $1 limit 1`, [SUPABASE_STATE_ID]);
       databaseFallbackReason = "";
-      if (result.rows[0]?.data) return result.rows[0].data;
+      if (result.rows[0]?.data) {
+        const db = result.rows[0].data;
+        if (removeDemoData(db) || ensureBootstrapAdmin(db)) await writeDb(db);
+        return db;
+      }
       const seeded = seedDb();
       await writeDb(seeded);
       return seeded;
@@ -461,7 +341,11 @@ async function readDb() {
     try {
       const rows = await supabaseRequest("GET", `?id=eq.${encodeURIComponent(SUPABASE_STATE_ID)}&select=data`, null);
       databaseFallbackReason = "";
-      if (rows?.[0]?.data) return rows[0].data;
+      if (rows?.[0]?.data) {
+        const db = rows[0].data;
+        if (removeDemoData(db) || ensureBootstrapAdmin(db)) await writeDb(db);
+        return db;
+      }
       const seeded = seedDb();
       await writeDb(seeded);
       return seeded;
@@ -470,7 +354,9 @@ async function readDb() {
     }
   }
   ensureDb();
-  return JSON.parse(fs.readFileSync(DB_FILE, "utf8"));
+  const db = JSON.parse(fs.readFileSync(DB_FILE, "utf8"));
+  if (removeDemoData(db) || ensureBootstrapAdmin(db)) await writeDb(db);
+  return db;
 }
 
 async function writeDb(db) {
@@ -679,7 +565,7 @@ async function api(req, res, pathname, query) {
     const session = makeSession(user.id);
     db.sessions.push(session);
     await writeDb(db);
-    return sendJson(res, { user: publicUser(user), otpDevCode: code }, 201, { "Set-Cookie": `cz_session=${session.id}; HttpOnly; SameSite=Lax; Path=/; Max-Age=1209600` });
+    return sendJson(res, { user: publicUser(user), phoneVerificationRequired: true }, 201, { "Set-Cookie": `cz_session=${session.id}; HttpOnly; SameSite=Lax; Path=/; Max-Age=1209600` });
   }
 
   if (req.method === "POST" && pathname === "/api/auth/login") {
