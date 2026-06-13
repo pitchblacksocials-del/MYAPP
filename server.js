@@ -46,6 +46,11 @@ const pgPool = USE_SUPABASE_POSTGRES
   : null;
 let pgReady = false;
 let databaseFallbackReason = "";
+const SUBSCRIPTION_PLANS = {
+  standard: { label: "Standard", amount: 150 },
+  prime: { label: "PRIME", amount: 250 }
+};
+const SUBSCRIPTION_STATUSES = ["active", "pending", "inactive", "suspended"];
 
 const categories = [
   "Construction",
@@ -190,6 +195,67 @@ const demoBusinessNames = new Set([
   "Pretoria Cloud Clinic"
 ]);
 
+function subscriptionPlanKey(value, fallback = "standard") {
+  const key = String(value || "").toLowerCase();
+  return SUBSCRIPTION_PLANS[key] ? key : fallback;
+}
+
+function subscriptionPlanLabel(planKey) {
+  return SUBSCRIPTION_PLANS[subscriptionPlanKey(planKey)].label;
+}
+
+function subscriptionPlanAmount(planKey) {
+  return SUBSCRIPTION_PLANS[subscriptionPlanKey(planKey)].amount;
+}
+
+function activeListing(business) {
+  return business.subscriptionStatus === "active" || business.primeStatus === "active";
+}
+
+function refreshSubscriptionAnalytics(db) {
+  db.analytics ||= {};
+  const businesses = db.businesses || [];
+  db.analytics.standardSubscribers = businesses.filter((business) => business.subscriptionPlan === "standard" && business.subscriptionStatus === "active").length;
+  db.analytics.primeSubscribers = businesses.filter((business) => business.subscriptionPlan === "prime" && business.subscriptionStatus === "active").length;
+  db.analytics.subscriptionRevenue = (db.analytics.standardSubscribers * SUBSCRIPTION_PLANS.standard.amount) + (db.analytics.primeSubscribers * SUBSCRIPTION_PLANS.prime.amount);
+  db.analytics.revenue = db.analytics.subscriptionRevenue;
+}
+
+function normalizeBusinessSubscriptions(db) {
+  let changed = false;
+  db.settings ||= {};
+  if (db.settings.standardMonthlyPrice !== SUBSCRIPTION_PLANS.standard.amount) {
+    db.settings.standardMonthlyPrice = SUBSCRIPTION_PLANS.standard.amount;
+    changed = true;
+  }
+  if (db.settings.primeMonthlyPrice !== SUBSCRIPTION_PLANS.prime.amount) {
+    db.settings.primeMonthlyPrice = SUBSCRIPTION_PLANS.prime.amount;
+    changed = true;
+  }
+
+  for (const business of db.businesses || []) {
+    if (!business.subscriptionPlan) {
+      business.subscriptionPlan = ["active", "pending", "suspended"].includes(business.primeStatus) ? "prime" : "none";
+      changed = true;
+    }
+    if (!business.subscriptionStatus) {
+      business.subscriptionStatus = ["active", "pending", "suspended"].includes(business.primeStatus) ? business.primeStatus : "inactive";
+      changed = true;
+    }
+    if (business.subscriptionPlan === "prime" && business.subscriptionStatus === "active" && business.primeStatus !== "active") {
+      business.primeStatus = "active";
+      changed = true;
+    }
+    if (business.subscriptionPlan !== "prime" && business.primeStatus !== "inactive") {
+      business.primeStatus = "inactive";
+      changed = true;
+    }
+  }
+
+  refreshSubscriptionAnalytics(db);
+  return changed;
+}
+
 function removeDemoData(db) {
   let changed = false;
   const demoUserIds = new Set((db.users || [])
@@ -216,9 +282,8 @@ function removeDemoData(db) {
   db.notifications = filterList(db.notifications || [], (notification) => !demoUserIds.has(notification.userId) && !demoBusinessNames.has(String(notification.text || "").replace(" needs approval", "")));
 
   db.analytics ||= {};
-  db.analytics.primeSubscribers = (db.businesses || []).filter((business) => business.primeStatus === "active").length;
+  refreshSubscriptionAnalytics(db);
   db.analytics.quoteRequests = (db.quotes || []).length;
-  db.analytics.revenue = db.analytics.primeSubscribers * 250;
   db.analytics.monthlyVisitors ||= 0;
   return changed;
 }
@@ -262,12 +327,15 @@ function seedDb() {
     ads: [],
     analytics: {
       revenue: 0,
+      standardSubscribers: 0,
       primeSubscribers: 0,
+      subscriptionRevenue: 0,
       quoteRequests: 0,
       monthlyVisitors: 0
     },
     settings: {
       slogan: "Connecting Professionals",
+      standardMonthlyPrice: 150,
       primeMonthlyPrice: 250
     }
   };
@@ -326,7 +394,8 @@ async function readDb() {
       databaseFallbackReason = "";
       if (result.rows[0]?.data) {
         const db = result.rows[0].data;
-        if (removeDemoData(db) || ensureBootstrapAdmin(db)) await writeDb(db);
+        const changed = [removeDemoData(db), normalizeBusinessSubscriptions(db), ensureBootstrapAdmin(db)].some(Boolean);
+        if (changed) await writeDb(db);
         return db;
       }
       const seeded = seedDb();
@@ -342,7 +411,8 @@ async function readDb() {
       databaseFallbackReason = "";
       if (rows?.[0]?.data) {
         const db = rows[0].data;
-        if (removeDemoData(db) || ensureBootstrapAdmin(db)) await writeDb(db);
+        const changed = [removeDemoData(db), normalizeBusinessSubscriptions(db), ensureBootstrapAdmin(db)].some(Boolean);
+        if (changed) await writeDb(db);
         return db;
       }
       const seeded = seedDb();
@@ -354,7 +424,8 @@ async function readDb() {
   }
   ensureDb();
   const db = JSON.parse(fs.readFileSync(DB_FILE, "utf8"));
-  if (removeDemoData(db) || ensureBootstrapAdmin(db)) await writeDb(db);
+  const changed = [removeDemoData(db), normalizeBusinessSubscriptions(db), ensureBootstrapAdmin(db)].some(Boolean);
+  if (changed) await writeDb(db);
   return db;
 }
 
@@ -483,6 +554,8 @@ function sanitizeBusiness(input, ownerId) {
     ownerId,
     status: "pending",
     primeStatus: "inactive",
+    subscriptionPlan: "none",
+    subscriptionStatus: "inactive",
     subscription: null,
     verified: false,
     name: String(input.name || "").trim(),
@@ -531,9 +604,35 @@ function businessScore(biz) {
 }
 
 function refreshPrimeAnalytics(db) {
-  db.analytics ||= {};
-  db.analytics.primeSubscribers = db.businesses.filter((biz) => biz.primeStatus === "active").length;
-  db.analytics.revenue = db.analytics.primeSubscribers * 250;
+  refreshSubscriptionAnalytics(db);
+}
+
+function setBusinessSubscriptionStatus(business, planKey, status) {
+  const plan = subscriptionPlanKey(planKey, business.subscriptionPlan === "prime" ? "prime" : "standard");
+  const nextStatus = SUBSCRIPTION_STATUSES.includes(status) ? status : business.subscriptionStatus || "inactive";
+  business.subscriptionPlan = plan;
+  business.subscriptionStatus = nextStatus;
+  business.subscription ||= {};
+  business.subscription.plan = plan;
+  business.subscription.planLabel = subscriptionPlanLabel(plan);
+  business.subscription.amount = subscriptionPlanAmount(plan);
+
+  if (plan === "prime") {
+    business.primeStatus = nextStatus;
+  } else {
+    business.primeStatus = "inactive";
+  }
+
+  if (nextStatus === "active") {
+    business.subscription.paymentStatus = "admin_approved";
+    business.subscription.approvedAt = new Date().toISOString();
+    business.subscription.nextBillingDate = new Date(Date.now() + 1000 * 60 * 60 * 24 * 30).toISOString().slice(0, 10);
+  }
+
+  if (["inactive", "suspended"].includes(nextStatus)) {
+    business.subscription.paymentStatus = nextStatus;
+    business.subscription.nextBillingDate = null;
+  }
 }
 
 async function api(req, res, pathname, query) {
@@ -603,7 +702,7 @@ async function api(req, res, pathname, query) {
 
   if (req.method === "GET" && pathname === "/api/businesses") {
     const result = db.businesses
-      .filter((biz) => query.admin === "true" || biz.status === "approved")
+      .filter((biz) => query.admin === "true" || (biz.status === "approved" && activeListing(biz)))
       .filter((biz) => !query.q || matchesSearch(biz, query.q))
       .filter((biz) => !query.category || biz.category === query.category)
       .filter((biz) => !query.province || biz.province === query.province)
@@ -743,18 +842,23 @@ async function api(req, res, pathname, query) {
     return sendJson(res, { review });
   }
 
-  if (req.method === "POST" && pathname === "/api/payments/prime") {
+  if (req.method === "POST" && (pathname === "/api/payments/subscription" || pathname === "/api/payments/prime")) {
     const user = requireAuth(req, res, db, "business");
     if (!user) return;
     const body = await readBody(req);
     const business = db.businesses.find((biz) => biz.id === body.businessId && biz.ownerId === user.id);
     if (!business) return sendJson(res, { error: "Business not found." }, 404);
-    if (business.primeStatus === "active") return sendJson(res, { error: "PRIME is already active for this business." }, 400);
+    const plan = pathname === "/api/payments/prime" ? "prime" : subscriptionPlanKey(body.plan, "standard");
+    if (business.subscriptionPlan === plan && business.subscriptionStatus === "active") {
+      return sendJson(res, { error: `${subscriptionPlanLabel(plan)} is already active for this business.` }, 400);
+    }
     const gateway = ["PayFast", "Ozow", "Yoco", "Stripe"].includes(body.gateway) ? body.gateway : "Stripe";
-    business.primeStatus = "pending";
+    setBusinessSubscriptionStatus(business, plan, "pending");
     business.subscription = {
+      plan,
+      planLabel: subscriptionPlanLabel(plan),
       gateway,
-      amount: 250,
+      amount: subscriptionPlanAmount(plan),
       autoRenew: Boolean(body.autoRenew),
       paymentStatus: "checkout_created",
       requestedAt: new Date().toISOString(),
@@ -762,8 +866,8 @@ async function api(req, res, pathname, query) {
       checkoutId: uid("pay")
     };
     await writeDb(db);
-    const redirectUrl = `/payment-success.html?businessId=${encodeURIComponent(business.id)}&gateway=${encodeURIComponent(gateway)}&checkoutId=${encodeURIComponent(business.subscription.checkoutId)}`;
-    return sendJson(res, { checkoutId: business.subscription.checkoutId, gateway, amount: 250, redirectUrl });
+    const redirectUrl = `/payment-success.html?businessId=${encodeURIComponent(business.id)}&gateway=${encodeURIComponent(gateway)}&checkoutId=${encodeURIComponent(business.subscription.checkoutId)}&plan=${encodeURIComponent(plan)}`;
+    return sendJson(res, { checkoutId: business.subscription.checkoutId, gateway, plan, planLabel: subscriptionPlanLabel(plan), amount: business.subscription.amount, redirectUrl });
   }
 
   if (req.method === "POST" && pathname === "/api/payments/webhook") {
@@ -773,14 +877,15 @@ async function api(req, res, pathname, query) {
     if (!business.subscription?.checkoutId || business.subscription.checkoutId !== body.checkoutId) {
       return sendJson(res, { error: "Payment checkout could not be verified." }, 400);
     }
-    business.primeStatus = "pending";
+    const plan = subscriptionPlanKey(business.subscription.plan || body.plan || business.subscriptionPlan, "standard");
+    setBusinessSubscriptionStatus(business, plan, "pending");
     business.subscription.gateway = body.gateway || business.subscription.gateway;
     business.subscription.paymentStatus = "paid_pending_admin";
     business.subscription.paidAt = new Date().toISOString();
     business.subscription.nextBillingDate = null;
-    refreshPrimeAnalytics(db);
+    refreshSubscriptionAnalytics(db);
     await writeDb(db);
-    broadcast("prime", publicBusiness(business));
+    broadcast("subscription", publicBusiness(business));
     return sendJson(res, { ok: true });
   }
 
@@ -796,6 +901,7 @@ async function api(req, res, pathname, query) {
       analytics: {
         ...db.analytics,
         activeBusinesses: db.businesses.filter((biz) => biz.status === "approved").length,
+        activeListings: db.businesses.filter((biz) => biz.status === "approved" && activeListing(biz)).length,
         pendingBusinesses: db.businesses.filter((biz) => biz.status === "pending").length,
         users: db.users.length
       }
@@ -813,20 +919,12 @@ async function api(req, res, pathname, query) {
       await writeDb(db);
       return sendJson(res, { business });
     }
-    if (pathname === "/api/admin/prime-status") {
+    if (pathname === "/api/admin/subscription-status" || pathname === "/api/admin/prime-status") {
       const business = db.businesses.find((biz) => biz.id === body.businessId);
       if (!business) return sendJson(res, { error: "Business not found." }, 404);
-      business.primeStatus = ["active", "pending", "inactive", "suspended"].includes(body.status) ? body.status : business.primeStatus;
-      business.subscription ||= {};
-      if (business.primeStatus === "active") {
-        business.subscription.paymentStatus = "admin_approved";
-        business.subscription.approvedAt = new Date().toISOString();
-        business.subscription.nextBillingDate = new Date(Date.now() + 1000 * 60 * 60 * 24 * 30).toISOString().slice(0, 10);
-      }
-      if (["inactive", "suspended"].includes(business.primeStatus)) {
-        business.subscription.paymentStatus = business.primeStatus;
-      }
-      refreshPrimeAnalytics(db);
+      const plan = pathname === "/api/admin/prime-status" ? "prime" : subscriptionPlanKey(body.plan || business.subscriptionPlan, "standard");
+      setBusinessSubscriptionStatus(business, plan, body.status);
+      refreshSubscriptionAnalytics(db);
       await writeDb(db);
       return sendJson(res, { business });
     }

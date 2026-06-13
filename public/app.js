@@ -38,6 +38,22 @@ function money(value) {
   return `R${Number(value || 0).toLocaleString("en-ZA")}`;
 }
 
+const subscriptionPlans = {
+  standard: { label: "Standard", amount: 150 },
+  prime: { label: "PRIME", amount: 250 }
+};
+
+function subscriptionPlanLabel(plan) {
+  const data = subscriptionPlans[plan] || subscriptionPlans.standard;
+  return `${data.label} R${data.amount}/month`;
+}
+
+function subscriptionBadge(business) {
+  if (business.primeStatus === "active") return `<span class="prime-badge">PRIME</span>`;
+  if (business.subscriptionPlan === "standard" && business.subscriptionStatus === "active") return `<span class="standard-badge">STANDARD</span>`;
+  return "";
+}
+
 function fillSelect(node, values, placeholder) {
   node.innerHTML = `<option value="">${placeholder}</option>` + values.map((value) => `<option value="${value}">${value}</option>`).join("");
 }
@@ -128,41 +144,48 @@ async function loadMyBusinesses() {
 function renderPrimePanel() {
   const select = $("#primeBusinessSelect");
   const status = $("#primeStatusText");
+  const planSelect = $("#subscriptionPlan");
   if (!select || !status) return;
   const selectedId = select.value;
+  const selectedPlan = planSelect?.value || "standard";
+  if ($("#startSubscription")) $("#startSubscription").textContent = selectedPlan === "prime" ? "Start PRIME" : "Start Standard";
 
   if (!state.user) {
     select.innerHTML = `<option value="">Sign in as a business owner</option>`;
-    status.textContent = "Business owners can activate PRIME after creating a business profile.";
+    status.textContent = "Business owners can activate Standard for R150/month or PRIME for R250/month.";
     return;
   }
 
   if (state.user.type !== "business") {
     select.innerHTML = `<option value="">Business account required</option>`;
-    status.textContent = "Create or sign in with a business account to promote a company with PRIME.";
+    status.textContent = "Create or sign in with a business account to subscribe a company.";
     return;
   }
 
   if (!state.myBusinesses.length) {
     select.innerHTML = `<option value="">Create a business profile first</option>`;
-    status.textContent = "Submit a business profile, then return here to start PRIME.";
+    status.textContent = "Submit a business profile, then return here to start a monthly subscription.";
     return;
   }
 
   select.innerHTML = state.myBusinesses.map((business) => {
-    const label = `${business.name} - ${business.primeStatus || "inactive"}`;
+    const plan = business.subscriptionPlan && business.subscriptionPlan !== "none" ? business.subscriptionPlan : "no plan";
+    const label = `${business.name} - ${plan} ${business.subscriptionStatus || "inactive"}`;
     return `<option value="${business.id}">${label}</option>`;
   }).join("");
 
   const selected = state.myBusinesses.find((business) => business.id === selectedId) || state.myBusinesses[0];
   select.value = selected.id;
-  const primeLabels = {
-    active: "PRIME is active. This business is boosted in search results.",
-    pending: "PRIME payment/request received. Admin approval is pending.",
-    suspended: "PRIME is suspended for this business.",
-    inactive: "PRIME is inactive. Start PRIME for R250/month."
+  const currentPlan = selected.subscriptionPlan && selected.subscriptionPlan !== "none" ? selected.subscriptionPlan : selectedPlan;
+  const currentStatus = selected.subscriptionStatus || selected.primeStatus || "inactive";
+  const planName = subscriptionPlans[currentPlan]?.label || "Subscription";
+  const labels = {
+    active: `${planName} is active. ${currentPlan === "prime" ? "This business is boosted in search results." : "This business is listed normally."}`,
+    pending: `${planName} payment/request received. Admin approval is pending.`,
+    suspended: `${planName} is suspended for this business.`,
+    inactive: `Choose Standard for R150/month or PRIME for R250/month.`
   };
-  status.textContent = primeLabels[selected.primeStatus] || primeLabels.inactive;
+  status.textContent = labels[currentStatus] || labels.inactive;
 }
 
 function renderCategories() {
@@ -197,7 +220,7 @@ function renderBusinesses() {
           <div>
             <h3>${biz.name}</h3>
             <div class="meta-line">
-              ${biz.primeStatus === "active" ? `<span class="prime-badge">PRIME</span>` : ""}
+              ${subscriptionBadge(biz)}
               ${biz.verified ? `<span class="verified-badge">Verified</span>` : ""}
               <span>★ ${biz.rating || "New"} (${biz.reviewCount || 0})</span>
             </div>
@@ -228,7 +251,7 @@ async function showProfile(id) {
         <div>
           <div class="profile-logo">${initials(business.name)}</div>
           <div class="meta-line">
-            ${business.primeStatus === "active" ? `<span class="prime-badge">PRIME</span>` : ""}
+            ${subscriptionBadge(business)}
             ${business.verified ? `<span class="verified-badge">Verified business</span>` : ""}
             <span>★ ${business.rating || "New"} rating</span>
           </div>
@@ -340,22 +363,23 @@ async function renderAdmin() {
   }
   const data = await api("/api/admin");
   $("#adminDashboard").innerHTML = `
-    <div class="admin-card"><h3>Revenue</h3><h2>${money(data.analytics.revenue)}</h2><p>PRIME and sponsored ads</p></div>
-    <div class="admin-card"><h3>Businesses</h3><h2>${data.analytics.activeBusinesses}</h2><p>${data.analytics.pendingBusinesses} pending approval</p></div>
+    <div class="admin-card"><h3>Revenue</h3><h2>${money(data.analytics.revenue)}</h2><p>${data.analytics.standardSubscribers || 0} Standard and ${data.analytics.primeSubscribers || 0} PRIME</p></div>
+    <div class="admin-card"><h3>Listings</h3><h2>${data.analytics.activeListings || 0}</h2><p>${data.analytics.pendingBusinesses} businesses pending approval</p></div>
     <div class="admin-card"><h3>Users</h3><h2>${data.analytics.users}</h2><p>Customers, businesses, admins</p></div>
     <div class="admin-card"><h3>Quote requests</h3><h2>${data.analytics.quoteRequests}</h2><p>Tracked marketplace demand</p></div>
     <div class="admin-card wide">
-      <h3>Business approval and PRIME moderation</h3>
+      <h3>Business approval and subscription moderation</h3>
       <div class="admin-list">
         ${data.businesses.map((biz) => `
           <div class="admin-row">
             <strong>${biz.name}</strong>
-            <small>${biz.category} • ${biz.city} • status: ${biz.status} • PRIME: ${biz.primeStatus} • docs: ${biz.verificationDocuments?.proofOfId && biz.verificationDocuments?.proofOfAddress ? "submitted" : "missing"}</small>
+            <small>${biz.category} • ${biz.city} • business: ${biz.status} • subscription: ${biz.subscriptionPlan || "none"} ${biz.subscriptionStatus || "inactive"} • PRIME: ${biz.primeStatus} • docs: ${biz.verificationDocuments?.proofOfId && biz.verificationDocuments?.proofOfAddress ? "submitted" : "missing"}</small>
             <div class="admin-row-actions">
               <button class="secondary-btn admin-status" data-id="${biz.id}" data-status="approved">Approve</button>
               <button class="secondary-btn admin-status" data-id="${biz.id}" data-status="suspended">Suspend</button>
-              <button class="secondary-btn admin-prime" data-id="${biz.id}" data-status="active">Approve PRIME</button>
-              <button class="secondary-btn admin-prime" data-id="${biz.id}" data-status="suspended">Suspend PRIME</button>
+              <button class="secondary-btn admin-subscription" data-id="${biz.id}" data-plan="standard" data-status="active">Approve Standard</button>
+              <button class="secondary-btn admin-subscription" data-id="${biz.id}" data-plan="prime" data-status="active">Approve PRIME</button>
+              <button class="secondary-btn admin-subscription" data-id="${biz.id}" data-plan="${biz.subscriptionPlan === "prime" ? "prime" : "standard"}" data-status="suspended">Suspend subscription</button>
             </div>
           </div>
         `).join("")}
@@ -389,6 +413,10 @@ function connectEvents() {
   events.addEventListener("prime", async () => {
     toast("PRIME status updated");
     await loadBusinesses();
+  });
+  events.addEventListener("subscription", async () => {
+    toast("Subscription status updated");
+    await Promise.all([loadBusinesses(), loadMyBusinesses()]);
   });
 }
 
@@ -446,11 +474,11 @@ document.addEventListener("click", async (event) => {
       await loadBusinesses();
       toast("Business status updated");
     }
-    if (target.classList.contains("admin-prime")) {
-      await api("/api/admin/prime-status", { method: "POST", body: JSON.stringify({ businessId: target.dataset.id, status: target.dataset.status }) });
+    if (target.classList.contains("admin-subscription")) {
+      await api("/api/admin/subscription-status", { method: "POST", body: JSON.stringify({ businessId: target.dataset.id, plan: target.dataset.plan, status: target.dataset.status }) });
       await renderAdmin();
-      await loadBusinesses();
-      toast("PRIME status updated");
+      await Promise.all([loadBusinesses(), loadMyBusinesses()]);
+      toast("Subscription status updated");
     }
   } catch (error) {
     toast(error.message);
@@ -602,18 +630,19 @@ $("#quoteForm").addEventListener("submit", async (event) => {
   }
 });
 
-$("#startPrime").addEventListener("click", async () => {
+$("#startSubscription").addEventListener("click", async () => {
   try {
     if (!state.user) return $("#authDialog").showModal();
-    if (state.user.type !== "business") throw new Error("Sign in as a business to start PRIME.");
+    if (state.user.type !== "business") throw new Error("Sign in as a business to start a subscription.");
     if (!state.myBusinesses.length) await loadMyBusinesses();
     const own = state.myBusinesses.find((biz) => biz.id === $("#primeBusinessSelect").value) || state.myBusinesses[0];
-    if (!own) throw new Error("Create a business profile before starting PRIME.");
-    const { redirectUrl, gateway } = await api("/api/payments/prime", {
+    if (!own) throw new Error("Create a business profile before starting a subscription.");
+    const plan = $("#subscriptionPlan").value;
+    const { redirectUrl, gateway, planLabel } = await api("/api/payments/subscription", {
       method: "POST",
-      body: JSON.stringify({ businessId: own.id, gateway: $("#primeGateway").value, autoRenew: $("#primeRenew").checked })
+      body: JSON.stringify({ businessId: own.id, plan, gateway: $("#primeGateway").value, autoRenew: $("#primeRenew").checked })
     });
-    toast(`${gateway} checkout created. Redirecting...`);
+    toast(`${gateway} ${planLabel} checkout created. Redirecting...`);
     setTimeout(() => { location.href = redirectUrl; }, 700);
   } catch (error) {
     toast(error.message);
@@ -621,6 +650,7 @@ $("#startPrime").addEventListener("click", async () => {
 });
 
 $("#primeBusinessSelect").addEventListener("input", renderPrimePanel);
+$("#subscriptionPlan").addEventListener("input", renderPrimePanel);
 
 $("#refreshAdmin").addEventListener("click", () => renderAdmin().catch((error) => toast(error.message)));
 

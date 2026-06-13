@@ -283,7 +283,7 @@ textarea {
 .prime-preview { bottom: 92px; }
 .chat-preview { bottom: 28px; }
 
-.prime-badge, .verified-badge, .status-pill {
+.prime-badge, .standard-badge, .verified-badge, .status-pill {
   display: inline-flex;
   align-items: center;
   width: fit-content;
@@ -297,6 +297,11 @@ textarea {
 .prime-badge {
   background: #4f5355;
   color: var(--brand-2);
+}
+
+.standard-badge {
+  background: color-mix(in srgb, var(--brand) 14%, #4f5355);
+  color: #ffffff;
 }
 
 .verified-badge {

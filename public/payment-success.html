@@ -3,14 +3,14 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>PRIME Payment Received | Connect-ZA</title>
-  <link rel="stylesheet" href="/styles.css?v=no-otp">
+  <title>Subscription Payment Received | Connect-ZA</title>
+  <link rel="stylesheet" href="/styles.css?v=business-plans">
 </head>
 <body class="payment-page">
   <main class="success-card">
     <div class="brand-mark">CZ</div>
-    <h1>PRIME payment received</h1>
-    <p id="paymentStatus">Confirming your PRIME request with Connect-ZA...</p>
+    <h1>Subscription payment received</h1>
+    <p id="paymentStatus">Confirming your subscription request with Connect-ZA...</p>
     <button id="activatePayment" class="primary-btn" disabled>Confirming</button>
     <a href="/" class="link-btn">Back to Connect-ZA</a>
   </main>
@@ -32,12 +32,13 @@
           body: JSON.stringify({
             businessId: params.get("businessId"),
             gateway: params.get("gateway"),
-            checkoutId: params.get("checkoutId")
+            checkoutId: params.get("checkoutId"),
+            plan: params.get("plan")
           })
         });
         const data = await response.json().catch(() => ({}));
         if (!response.ok) throw new Error(data.error || "Payment confirmation failed.");
-        status.textContent = "Your PRIME request is paid and pending admin approval.";
+        status.textContent = "Your subscription request is paid and pending admin approval.";
         button.textContent = "Return to Connect-ZA";
         button.disabled = false;
       } catch (error) {

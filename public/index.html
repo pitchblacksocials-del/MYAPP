@@ -7,7 +7,7 @@
   <meta name="description" content="Connect-ZA connects customers with trusted South African businesses and service providers.">
   <title>Connect-ZA | Connecting Professionals</title>
   <link rel="manifest" href="/manifest.webmanifest">
-  <link rel="stylesheet" href="/styles.css?v=no-otp">
+  <link rel="stylesheet" href="/styles.css?v=business-plans">
 </head>
 <body>
   <header class="app-header">
@@ -17,7 +17,7 @@
     </a>
     <nav class="desktop-nav">
       <a href="#discover">Discover</a>
-      <a href="#prime">PRIME</a>
+      <a href="#prime">Plans</a>
       <a href="#legal">Legal</a>
     </nav>
     <div class="header-actions">
@@ -41,7 +41,7 @@
         </form>
         <div class="hero-stats hidden" aria-label="Marketplace statistics">
           <span><strong id="statBusinesses">0</strong> businesses</span>
-          <span><strong>R250</strong> PRIME / month</span>
+          <span><strong>R150</strong> Standard / <strong>R250</strong> PRIME</span>
           <span><strong>9</strong> provinces</span>
         </div>
       </div>
@@ -68,7 +68,7 @@
       <article>
         <span>1</span>
         <strong>Create your account</strong>
-        <p>Customers browse and request quotes. Businesses register, verify phone numbers, and build profiles.</p>
+        <p>Customers browse and request quotes. Businesses register, submit verification documents, and build profiles.</p>
       </article>
       <article>
         <span>2</span>
@@ -77,8 +77,8 @@
       </article>
       <article>
         <span>3</span>
-        <strong>Grow with PRIME</strong>
-        <p>PRIME businesses rank first, receive premium cards, homepage visibility, and admin-managed status.</p>
+        <strong>Choose a plan</strong>
+        <p>Standard businesses list normally for R150/month. PRIME businesses rank first for R250/month.</p>
       </article>
     </section>
 
@@ -109,13 +109,17 @@
 
     <section id="prime" class="prime-section">
       <div>
-        <p class="eyebrow">Paid boost</p>
-        <h2>PRIME visibility for R250/month</h2>
-        <p>PRIME businesses rank above standard listings, receive a premium badge, highlighted cards, and stronger visibility across search and category pages.</p>
+        <p class="eyebrow">Business subscriptions</p>
+        <h2>Standard R150/month or PRIME R250/month</h2>
+        <p>Standard keeps an approved business listed normally. PRIME adds boosted search ranking, a premium badge, highlighted cards, and stronger visibility.</p>
       </div>
       <div class="prime-actions">
         <select id="primeBusinessSelect" aria-label="Select your business">
           <option value="">Select your business</option>
+        </select>
+        <select id="subscriptionPlan" aria-label="Subscription plan">
+          <option value="standard">Standard - R150/month</option>
+          <option value="prime">PRIME - R250/month</option>
         </select>
         <select id="primeGateway" aria-label="Payment gateway">
           <option>Stripe</option>
@@ -124,8 +128,8 @@
           <option>Yoco</option>
         </select>
         <label class="toggle-row"><input id="primeRenew" type="checkbox" checked> Auto-renew</label>
-        <button id="startPrime" class="primary-btn">Start PRIME</button>
-        <p id="primeStatusText" class="prime-status-text">Business owners can activate PRIME after creating a business profile.</p>
+        <button id="startSubscription" class="primary-btn">Start Standard</button>
+        <p id="primeStatusText" class="prime-status-text">Business owners can activate Standard for R150/month or PRIME for R250/month.</p>
       </div>
     </section>
 
@@ -227,8 +231,9 @@
         <h3>Terms and conditions</h3>
         <p>By using Connect-ZA, users agree that the platform helps customers find and contact businesses, but does not guarantee workmanship, availability, pricing, payment outside the platform, or outcomes of direct customer-business agreements.</p>
         <ul>
-          <li>PRIME costs R250 per month and gives approved businesses boosted visibility, a PRIME badge, and highlighted placement.</li>
-          <li>PRIME payment does not override admin approval, verification, moderation, or suspension rights.</li>
+          <li>Standard subscriptions cost R150 per month and keep approved businesses listed normally.</li>
+          <li>PRIME subscriptions cost R250 per month and add boosted visibility, a PRIME badge, and highlighted placement.</li>
+          <li>Subscription payment does not override admin approval, verification, moderation, or suspension rights.</li>
           <li>Reviews must be honest, based on real customer experiences, and may be moderated when abusive or false.</li>
           <li>Continued use of the platform means acceptance of these terms and future policy updates.</li>
         </ul>
@@ -316,6 +321,6 @@
   </dialog>
 
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
-  <script src="/app.js?v=no-otp"></script>
+  <script src="/app.js?v=business-plans"></script>
 </body>
 </html>

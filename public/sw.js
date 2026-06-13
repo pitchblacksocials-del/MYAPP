@@ -1,4 +1,4 @@
-const CACHE = "connect-za-v12-no-otp";
+const CACHE = "connect-za-v13-business-plans";
 const ASSETS = ["/", "/styles.css", "/app.js", "/manifest.webmanifest", "/icons/icon.svg"];
 
 self.addEventListener("install", (event) => {
