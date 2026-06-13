@@ -253,7 +253,6 @@ function ensureBootstrapAdmin(db) {
 function seedDb() {
   return {
     users: bootstrapUsers(),
-    otp: [],
     sessions: [],
     businesses: [],
     reviews: [],
@@ -559,19 +558,17 @@ async function api(req, res, pathname, query) {
       email: String(body.email).toLowerCase(),
       phone: String(body.phone),
       passwordHash: hashPassword(String(body.password)),
-      phoneVerified: false,
+      phoneVerified: true,
       createdAt: new Date().toISOString(),
       savedBusinesses: [],
       city,
       province
     };
-    const code = String(Math.floor(100000 + Math.random() * 900000));
     db.users.push(user);
-    db.otp.push({ phone: user.phone, code, expiresAt: Date.now() + 10 * 60 * 1000 });
     const session = makeSession(user.id);
     db.sessions.push(session);
     await writeDb(db);
-    return sendJson(res, { user: publicUser(user), phoneVerificationRequired: true }, 201, { "Set-Cookie": `cz_session=${session.id}; HttpOnly; SameSite=Lax; Path=/; Max-Age=1209600` });
+    return sendJson(res, { user: publicUser(user) }, 201, { "Set-Cookie": `cz_session=${session.id}; HttpOnly; SameSite=Lax; Path=/; Max-Age=1209600` });
   }
 
   if (req.method === "POST" && pathname === "/api/auth/login") {
@@ -594,18 +591,6 @@ async function api(req, res, pathname, query) {
   if (req.method === "GET" && pathname === "/api/auth/me") {
     const user = requireAuth(req, res, db);
     if (!user) return;
-    return sendJson(res, { user: publicUser(user) });
-  }
-
-  if (req.method === "POST" && pathname === "/api/auth/verify-otp") {
-    const user = requireAuth(req, res, db);
-    if (!user) return;
-    const body = await readBody(req);
-    const otp = db.otp.find((item) => item.phone === user.phone && item.code === String(body.code) && item.expiresAt > Date.now());
-    if (!otp) return sendJson(res, { error: "Invalid or expired OTP." }, 400);
-    user.phoneVerified = true;
-    db.otp = db.otp.filter((item) => item !== otp);
-    await writeDb(db);
     return sendJson(res, { user: publicUser(user) });
   }
 

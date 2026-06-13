@@ -503,18 +503,7 @@ $("#registerBtn").addEventListener("click", async () => {
       })
     });
     state.user = user;
-    $("#authMessage").textContent = "Account created. Phone verification is pending.";
-    renderUser();
-  } catch (error) {
-    $("#authMessage").textContent = error.message;
-  }
-});
-
-$("#verifyOtpBtn").addEventListener("click", async () => {
-  try {
-    const { user } = await api("/api/auth/verify-otp", { method: "POST", body: JSON.stringify({ code: $("#otpCode").value }) });
-    state.user = user;
-    $("#authMessage").textContent = "Phone verified.";
+    $("#authMessage").textContent = "Account created. You are signed in.";
     renderUser();
   } catch (error) {
     $("#authMessage").textContent = error.message;

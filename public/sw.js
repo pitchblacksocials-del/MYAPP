@@ -1,4 +1,4 @@
-const CACHE = "connect-za-v11-legal-footer";
+const CACHE = "connect-za-v12-no-otp";
 const ASSETS = ["/", "/styles.css", "/app.js", "/manifest.webmanifest", "/icons/icon.svg"];
 
 self.addEventListener("install", (event) => {

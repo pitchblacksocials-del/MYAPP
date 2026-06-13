@@ -98,7 +98,7 @@ a {
   color: #f8fbff;
 }
 
-.header-actions, .prime-actions, .filters, .hero-search, .otp-row {
+.header-actions, .prime-actions, .filters, .hero-search {
   display: flex;
   gap: 10px;
   align-items: center;
