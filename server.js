@@ -23,7 +23,8 @@ const PORT = Number(process.env.PORT || 3000);
 const DATA_DIR = path.join(__dirname, "data");
 const DB_FILE = path.join(DATA_DIR, "db.json");
 const PUBLIC_DIR = path.join(__dirname, "public");
-const MAX_BODY = 15 * 1024 * 1024;
+const MAX_BODY = 35 * 1024 * 1024;
+const MAX_BODY_MB = Math.floor(MAX_BODY / 1024 / 1024);
 const SUPABASE_URL = process.env.SUPABASE_URL || "";
 const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || "";
 const SUPABASE_DATABASE_URL = process.env.SUPABASE_DATABASE_URL || process.env.DATABASE_URL || "";
@@ -517,19 +518,27 @@ function sendJson(res, body, status = 200, headers = {}) {
 function readBody(req) {
   return new Promise((resolve, reject) => {
     let body = "";
+    let tooLarge = false;
     req.on("data", (chunk) => {
+      if (tooLarge) return;
       body += chunk;
       if (body.length > MAX_BODY) {
-        reject(new Error("Payload too large"));
-        req.destroy();
+        tooLarge = true;
+        body = "";
+        const error = new Error(`Uploaded files are too large. Please keep the total upload below ${MAX_BODY_MB}MB.`);
+        error.statusCode = 413;
+        reject(error);
       }
     });
     req.on("end", () => {
+      if (tooLarge) return;
       if (!body) return resolve({});
       try {
         resolve(JSON.parse(body));
       } catch (error) {
-        reject(new Error("Invalid JSON"));
+        const invalidJson = new Error("Invalid request data.");
+        invalidJson.statusCode = 400;
+        reject(invalidJson);
       }
     });
   });
@@ -983,10 +992,14 @@ const server = http.createServer(async (req, res) => {
   try {
     const parsed = url.parse(req.url, true);
     if (parsed.pathname === "/health") return sendJson(res, { ok: true, service: "connect-za", databaseProvider: databaseProvider() });
+    if (parsed.pathname.startsWith("/api/") && Number(req.headers["content-length"] || 0) > MAX_BODY) {
+      return sendJson(res, { error: `Uploaded files are too large. Please keep the total upload below ${MAX_BODY_MB}MB.` }, 413);
+    }
     if (parsed.pathname.startsWith("/api/")) return await api(req, res, parsed.pathname, parsed.query);
     return serveStatic(req, res, decodeURIComponent(parsed.pathname));
   } catch (error) {
-    sendJson(res, { error: error.message || "Server error" }, 500);
+    const status = error.statusCode || 500;
+    sendJson(res, { error: error.message || "Server error" }, status);
   }
 });
 

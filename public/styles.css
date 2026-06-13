@@ -861,6 +861,12 @@ footer {
   grid-column: 1 / -1;
 }
 
+.upload-note {
+  grid-column: 1 / -1;
+  color: var(--muted);
+  font-weight: 800;
+}
+
 .verification-docs {
   grid-column: 1 / -1;
   display: grid;

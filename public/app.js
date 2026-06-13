@@ -12,13 +12,24 @@ const $ = (selector) => document.querySelector(selector);
 const $$ = (selector) => Array.from(document.querySelectorAll(selector));
 
 async function api(path, options = {}) {
-  const response = await fetch(path, {
-    credentials: "include",
-    headers: { "Content-Type": "application/json", ...(options.headers || {}) },
-    ...options
-  });
-  const data = await response.json().catch(() => ({}));
-  if (!response.ok) throw new Error(data.error || "Request failed");
+  let response;
+  try {
+    response = await fetch(path, {
+      credentials: "include",
+      headers: { "Content-Type": "application/json", ...(options.headers || {}) },
+      ...options
+    });
+  } catch {
+    throw new Error("Could not reach the server. Please check your connection and reduce upload file sizes if you selected large files.");
+  }
+  const text = await response.text();
+  let data = {};
+  try {
+    data = text ? JSON.parse(text) : {};
+  } catch {
+    data = { error: text };
+  }
+  if (!response.ok) throw new Error(data.error || `Request failed (${response.status})`);
   return data;
 }
 
@@ -42,6 +53,8 @@ const subscriptionPlans = {
   standard: { label: "Standard", amount: 150 },
   prime: { label: "PRIME", amount: 250 }
 };
+const MAX_BUSINESS_FILE_BYTES = 8 * 1024 * 1024;
+const MAX_BUSINESS_UPLOAD_BYTES = 20 * 1024 * 1024;
 
 function subscriptionPlanLabel(plan) {
   const data = subscriptionPlans[plan] || subscriptionPlans.standard;
@@ -356,6 +369,19 @@ async function fileInputsToDataUrls(input) {
   })));
 }
 
+function validateBusinessFiles() {
+  const inputs = [$("#bizGallery"), $("#bizProofId"), $("#bizProofAddress")];
+  const files = inputs.flatMap((input) => Array.from(input.files || []));
+  const oversized = files.find((file) => file.size > MAX_BUSINESS_FILE_BYTES);
+  if (oversized) {
+    throw new Error(`${oversized.name} is too large. Please use files smaller than 8MB each.`);
+  }
+  const totalSize = files.reduce((sum, file) => sum + file.size, 0);
+  if (totalSize > MAX_BUSINESS_UPLOAD_BYTES) {
+    throw new Error("Business registration uploads are too large. Please keep all selected files under 20MB total.");
+  }
+}
+
 async function renderAdmin() {
   if (state.user?.type !== "admin") {
     $("#adminDashboard").innerHTML = `<div class="admin-card wide"><h3>Admin access</h3><p>Sign in with an administrator account to manage users, approvals, PRIME, revenue, reports, ads, and push notifications.</p></div>`;
@@ -544,8 +570,13 @@ $("#resetBtn").addEventListener("click", async () => {
 });
 
 $("#saveBusinessBtn").addEventListener("click", async () => {
+  const button = $("#saveBusinessBtn");
   try {
     if (!state.user) return $("#authDialog").showModal();
+    button.disabled = true;
+    button.textContent = "Submitting...";
+    $("#businessMessage").textContent = "Uploading business details...";
+    validateBusinessFiles();
     const gallery = (await fileInputsToDataUrls($("#bizGallery"))).map((file) => file.data);
     const proofOfId = (await fileInputsToDataUrls($("#bizProofId")))[0];
     const proofOfAddress = (await fileInputsToDataUrls($("#bizProofAddress")))[0];
@@ -580,6 +611,9 @@ $("#saveBusinessBtn").addEventListener("click", async () => {
     await loadBusinesses();
   } catch (error) {
     $("#businessMessage").textContent = error.message;
+  } finally {
+    button.disabled = false;
+    button.textContent = "Submit for approval";
   }
 });
 
