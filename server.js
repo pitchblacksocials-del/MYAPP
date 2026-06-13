@@ -1,0 +1,990 @@
+const http = require("http");
+const fs = require("fs");
+const path = require("path");
+const crypto = require("crypto");
+const url = require("url");
+const { Pool } = require("pg");
+
+function loadEnvFile() {
+  const envPath = path.join(__dirname, ".env");
+  if (!fs.existsSync(envPath)) return;
+  const lines = fs.readFileSync(envPath, "utf8").split(/\r?\n/);
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith("#") || !trimmed.includes("=")) continue;
+    const [key, ...valueParts] = trimmed.split("=");
+    if (!process.env[key]) process.env[key] = valueParts.join("=").replace(/^["']|["']$/g, "");
+  }
+}
+
+loadEnvFile();
+
+const PORT = Number(process.env.PORT || 3000);
+const DATA_DIR = path.join(__dirname, "data");
+const DB_FILE = path.join(DATA_DIR, "db.json");
+const PUBLIC_DIR = path.join(__dirname, "public");
+const MAX_BODY = 15 * 1024 * 1024;
+const SUPABASE_URL = process.env.SUPABASE_URL || "";
+const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || "";
+const SUPABASE_DATABASE_URL = process.env.SUPABASE_DATABASE_URL || process.env.DATABASE_URL || "";
+const SUPABASE_STATE_TABLE = process.env.SUPABASE_STATE_TABLE || "connect_za_state";
+const SUPABASE_STATE_ID = process.env.SUPABASE_STATE_ID || "production";
+function configured(value, placeholders) {
+  return Boolean(value && !placeholders.some((placeholder) => value.includes(placeholder)));
+}
+
+const USE_SUPABASE_POSTGRES = configured(SUPABASE_DATABASE_URL, ["[YOUR-PASSWORD]", "your-password"]);
+const USE_SUPABASE_REST = !USE_SUPABASE_POSTGRES
+  && configured(SUPABASE_URL, ["your-project-ref"])
+  && configured(SUPABASE_SERVICE_ROLE_KEY, ["your-service-role-key"]);
+const USE_SUPABASE = USE_SUPABASE_POSTGRES || USE_SUPABASE_REST;
+const pgPool = USE_SUPABASE_POSTGRES
+  ? new Pool({
+      connectionString: SUPABASE_DATABASE_URL,
+      ssl: { rejectUnauthorized: false }
+    })
+  : null;
+let pgReady = false;
+let databaseFallbackReason = "";
+
+const categories = [
+  "Construction",
+  "Plumbing",
+  "Electrical",
+  "Security",
+  "Automotive",
+  "Beauty",
+  "Cleaning",
+  "Logistics",
+  "IT",
+  "Solar",
+  "Landscaping",
+  "Catering"
+];
+
+const provinces = [
+  "Eastern Cape",
+  "Free State",
+  "Gauteng",
+  "KwaZulu-Natal",
+  "Limpopo",
+  "Mpumalanga",
+  "Northern Cape",
+  "North West",
+  "Western Cape"
+];
+
+const cities = [
+  "Alice",
+  "Beaufort West",
+  "Bethlehem",
+  "Bhisho",
+  "Bloemfontein",
+  "Boksburg",
+  "Brakpan",
+  "Cape Town",
+  "Carletonville",
+  "Centurion",
+  "Cradock",
+  "De Aar",
+  "Durban",
+  "East London",
+  "Emalahleni",
+  "Empangeni",
+  "Ermelo",
+  "Gqeberha",
+  "George",
+  "Graaff-Reinet",
+  "Grahamstown",
+  "Harrismith",
+  "Hermanus",
+  "Johannesburg",
+  "Kempton Park",
+  "Kimberley",
+  "Klerksdorp",
+  "Knysna",
+  "Komatipoort",
+  "Kroonstad",
+  "Krugersdorp",
+  "Kuruman",
+  "Ladysmith",
+  "Lephalale",
+  "Louis Trichardt",
+  "Mafikeng",
+  "Margate",
+  "Mbombela",
+  "Middelburg",
+  "Midrand",
+  "Mokopane",
+  "Mossel Bay",
+  "Mthatha",
+  "Newcastle",
+  "Paarl",
+  "Phalaborwa",
+  "Pietermaritzburg",
+  "Pinetown",
+  "Plettenberg Bay",
+  "Polokwane",
+  "Port Shepstone",
+  "Potchefstroom",
+  "Pretoria",
+  "Queenstown",
+  "Randburg",
+  "Richards Bay",
+  "Rustenburg",
+  "Saldanha",
+  "Sandton",
+  "Sasolburg",
+  "Secunda",
+  "Somerset West",
+  "Soweto",
+  "Springs",
+  "Stellenbosch",
+  "Thohoyandou",
+  "Tzaneen",
+  "Uitenhage",
+  "Ulundi",
+  "Upington",
+  "Vanderbijlpark",
+  "Vereeniging",
+  "Virginia",
+  "Vryburg",
+  "Vryheid",
+  "Welkom",
+  "Worcester"
+];
+
+function canonicalFromList(value, list) {
+  return list.find((item) => item.toLowerCase() === String(value || "").trim().toLowerCase()) || "";
+}
+
+function uid(prefix) {
+  return `${prefix}_${crypto.randomBytes(8).toString("hex")}`;
+}
+
+function hashPassword(password, salt = crypto.randomBytes(16).toString("hex")) {
+  const hash = crypto.pbkdf2Sync(password, salt, 120000, 64, "sha512").toString("hex");
+  return `${salt}:${hash}`;
+}
+
+function verifyPassword(password, stored) {
+  const [salt, hash] = String(stored || "").split(":");
+  if (!salt || !hash) return false;
+  const candidate = crypto.pbkdf2Sync(password, salt, 120000, 64, "sha512").toString("hex");
+  return crypto.timingSafeEqual(Buffer.from(hash), Buffer.from(candidate));
+}
+
+function makeSession(userId) {
+  return {
+    id: uid("ses"),
+    userId,
+    expiresAt: Date.now() + 1000 * 60 * 60 * 24 * 14
+  };
+}
+
+function seedDb() {
+  const adminId = uid("usr");
+  const customerId = uid("usr");
+  const businessOwnerId = uid("usr");
+  const biz1 = uid("biz");
+  const biz2 = uid("biz");
+  const biz3 = uid("biz");
+  const biz4 = uid("biz");
+  return {
+    users: [
+      {
+        id: adminId,
+        type: "admin",
+        name: "Connect-ZA Admin",
+        email: "admin@connect-za.local",
+        phone: "+27821234567",
+        passwordHash: hashPassword("Admin123!"),
+        phoneVerified: true,
+        createdAt: new Date().toISOString(),
+        savedBusinesses: []
+      },
+      {
+        id: customerId,
+        type: "customer",
+        name: "Thando Mokoena",
+        email: "customer@connect-za.local",
+        phone: "+27831234567",
+        passwordHash: hashPassword("Customer123!"),
+        phoneVerified: true,
+        createdAt: new Date().toISOString(),
+        savedBusinesses: [biz1],
+        city: "Johannesburg",
+        province: "Gauteng"
+      },
+      {
+        id: businessOwnerId,
+        type: "business",
+        name: "Aisha Naidoo",
+        email: "business@connect-za.local",
+        phone: "+27721234567",
+        passwordHash: hashPassword("Business123!"),
+        phoneVerified: true,
+        createdAt: new Date().toISOString(),
+        savedBusinesses: []
+      }
+    ],
+    otp: [],
+    sessions: [],
+    businesses: [
+      {
+        id: biz1,
+        ownerId: businessOwnerId,
+        status: "approved",
+        primeStatus: "active",
+        subscription: { gateway: "Stripe", amount: 250, autoRenew: true, nextBillingDate: "2026-07-11" },
+        verified: true,
+        name: "Mzansi Build & Renovate",
+        category: "Construction",
+        services: ["Home renovations", "Tiling", "Roof repairs", "Project management"],
+        description: "Reliable residential and commercial renovations with documented workmanship and transparent quote timelines.",
+        province: "Gauteng",
+        city: "Johannesburg",
+        address: "88 Commissioner Street, Johannesburg",
+        phone: "+27821230001",
+        email: "hello@mzansibuild.co.za",
+        website: "https://mzansibuild.example",
+        socials: ["https://facebook.com/mzansibuild", "https://instagram.com/mzansibuild"],
+        logo: "",
+        cover: "",
+        hours: "Mon-Fri 07:00-17:30, Sat 08:00-13:00",
+        pricingMode: "Request quote",
+        priceRange: "R1,500 - R250,000",
+        rating: 4.9,
+        reviewCount: 42,
+        lat: -26.2041,
+        lng: 28.0473,
+        gallery: [
+          "https://images.unsplash.com/photo-1503387762-592deb58ef4e?auto=format&fit=crop&w=900&q=80",
+          "https://images.unsplash.com/photo-1486406146926-c627a92ad1ab?auto=format&fit=crop&w=900&q=80",
+          "https://images.unsplash.com/photo-1600585154340-be6161a56a0c?auto=format&fit=crop&w=900&q=80"
+        ],
+        createdAt: "2026-06-01T09:00:00.000Z"
+      },
+      {
+        id: biz2,
+        ownerId: uid("usr"),
+        status: "approved",
+        primeStatus: "active",
+        subscription: { gateway: "PayFast", amount: 250, autoRenew: true, nextBillingDate: "2026-07-04" },
+        verified: true,
+        name: "Cape Circuit Pros",
+        category: "Electrical",
+        services: ["Coc certificates", "Solar inverter installs", "Fault finding", "Emergency repairs"],
+        description: "Certified electricians serving homes, estates, and SMEs across the Western Cape.",
+        province: "Western Cape",
+        city: "Cape Town",
+        address: "15 Bree Street, Cape Town",
+        phone: "+27821230002",
+        email: "bookings@capecircuit.example",
+        website: "https://capecircuit.example",
+        socials: ["https://linkedin.com/company/capecircuit"],
+        logo: "",
+        cover: "",
+        hours: "Daily 06:00-22:00",
+        pricingMode: "From R650 call-out",
+        priceRange: "R650 - R80,000",
+        rating: 4.8,
+        reviewCount: 31,
+        lat: -33.9249,
+        lng: 18.4241,
+        gallery: [
+          "https://images.unsplash.com/photo-1621905252507-b35492cc74b4?auto=format&fit=crop&w=900&q=80",
+          "https://images.unsplash.com/photo-1509391366360-2e959784a276?auto=format&fit=crop&w=900&q=80"
+        ],
+        createdAt: "2026-06-05T10:30:00.000Z"
+      },
+      {
+        id: biz3,
+        ownerId: uid("usr"),
+        status: "approved",
+        primeStatus: "inactive",
+        subscription: null,
+        verified: false,
+        name: "Durban Shield Security",
+        category: "Security",
+        services: ["CCTV", "Access control", "Armed response consulting", "Alarm installation"],
+        description: "Security technology specialists for retail, warehouses, complexes, and private homes.",
+        province: "KwaZulu-Natal",
+        city: "Durban",
+        address: "44 Florida Road, Durban",
+        phone: "+27821230003",
+        email: "ops@durbanshield.example",
+        website: "https://durbansecurity.example",
+        socials: [],
+        logo: "",
+        cover: "",
+        hours: "24/7 emergency support",
+        pricingMode: "Request quote",
+        priceRange: "R950 - R120,000",
+        rating: 4.6,
+        reviewCount: 18,
+        lat: -29.8587,
+        lng: 31.0218,
+        gallery: [
+          "https://images.unsplash.com/photo-1558002038-1055907df827?auto=format&fit=crop&w=900&q=80",
+          "https://images.unsplash.com/photo-1581090464777-f3220bbe1b8b?auto=format&fit=crop&w=900&q=80"
+        ],
+        createdAt: "2026-06-08T12:00:00.000Z"
+      },
+      {
+        id: biz4,
+        ownerId: uid("usr"),
+        status: "pending",
+        primeStatus: "pending",
+        subscription: { gateway: "Yoco", amount: 250, autoRenew: false, nextBillingDate: null },
+        verified: false,
+        name: "Pretoria Cloud Clinic",
+        category: "IT",
+        services: ["Managed IT", "Cybersecurity audits", "Cloud migration", "POS support"],
+        description: "IT support for professional practices and growing retail businesses.",
+        province: "Gauteng",
+        city: "Pretoria",
+        address: "210 Lynnwood Road, Pretoria",
+        phone: "+27821230004",
+        email: "support@cloudclinic.example",
+        website: "https://cloudclinic.example",
+        socials: ["https://x.com/cloudclinic"],
+        logo: "",
+        cover: "",
+        hours: "Mon-Fri 08:00-18:00",
+        pricingMode: "From R499/month",
+        priceRange: "R499 - R45,000",
+        rating: 4.7,
+        reviewCount: 11,
+        lat: -25.7479,
+        lng: 28.2293,
+        gallery: [
+          "https://images.unsplash.com/photo-1497366754035-f200968a6e72?auto=format&fit=crop&w=900&q=80"
+        ],
+        createdAt: "2026-06-10T08:20:00.000Z"
+      }
+    ],
+    reviews: [
+      { id: uid("rev"), businessId: biz1, userId: customerId, rating: 5, text: "Professional team, clean finish, and the quote stayed accurate.", verified: true, response: "Thank you, Thando. It was a pleasure.", createdAt: "2026-06-06T14:00:00.000Z" },
+      { id: uid("rev"), businessId: biz2, userId: customerId, rating: 5, text: "Fast COC turnaround and great communication.", verified: true, response: "", createdAt: "2026-06-09T10:15:00.000Z" }
+    ],
+    quotes: [],
+    conversations: [
+      {
+        id: uid("con"),
+        businessId: biz1,
+        customerId,
+        messages: [
+          { id: uid("msg"), senderId: customerId, type: "text", text: "Hi, can you quote on a bathroom renovation in Sandton?", createdAt: new Date(Date.now() - 3600000).toISOString(), read: true },
+          { id: uid("msg"), senderId: businessOwnerId, type: "text", text: "Absolutely. Please send photos and the rough size of the bathroom.", createdAt: new Date(Date.now() - 3000000).toISOString(), read: false }
+        ],
+        updatedAt: new Date(Date.now() - 3000000).toISOString()
+      }
+    ],
+    notifications: [],
+    ads: [
+      { id: uid("ad"), title: "Winter solar installation deals", placement: "homepage", active: true, clicks: 128, impressions: 2700 }
+    ],
+    analytics: {
+      revenue: 750,
+      primeSubscribers: 3,
+      quoteRequests: 0,
+      monthlyVisitors: 18420
+    },
+    settings: {
+      slogan: "Connecting Professionals",
+      primeMonthlyPrice: 250
+    }
+  };
+}
+
+function ensureDb() {
+  if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
+  if (!fs.existsSync(DB_FILE)) fs.writeFileSync(DB_FILE, JSON.stringify(seedDb(), null, 2));
+}
+
+function sqlIdentifier(name) {
+  if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(name)) throw new Error("Invalid Supabase state table name.");
+  return `"${name}"`;
+}
+
+async function ensurePostgresStateTable() {
+  if (!pgPool || pgReady) return;
+  const table = sqlIdentifier(SUPABASE_STATE_TABLE);
+  await pgPool.query(`
+    create table if not exists public.${table} (
+      id text primary key,
+      data jsonb not null,
+      updated_at timestamptz not null default now()
+    )
+  `);
+  pgReady = true;
+}
+
+async function supabaseRequest(method, query, body) {
+  const endpoint = `${SUPABASE_URL.replace(/\/$/, "")}/rest/v1/${SUPABASE_STATE_TABLE}${query}`;
+  const response = await fetch(endpoint, {
+    method,
+    headers: {
+      apikey: SUPABASE_SERVICE_ROLE_KEY,
+      Authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
+      "Content-Type": "application/json",
+      Prefer: "resolution=merge-duplicates,return=representation"
+    },
+    body: body ? JSON.stringify(body) : undefined
+  });
+  const text = await response.text();
+  const data = text ? JSON.parse(text) : null;
+  if (!response.ok) {
+    const detail = data?.message || data?.hint || text || response.statusText;
+    throw new Error(`Supabase ${method} failed: ${detail}`);
+  }
+  return data;
+}
+
+async function readDb() {
+  if (USE_SUPABASE_POSTGRES) {
+    try {
+      await ensurePostgresStateTable();
+      const table = sqlIdentifier(SUPABASE_STATE_TABLE);
+      const result = await pgPool.query(`select data from public.${table} where id = $1 limit 1`, [SUPABASE_STATE_ID]);
+      databaseFallbackReason = "";
+      if (result.rows[0]?.data) return result.rows[0].data;
+      const seeded = seedDb();
+      await writeDb(seeded);
+      return seeded;
+    } catch (error) {
+      databaseFallbackReason = error.message;
+    }
+  }
+  if (USE_SUPABASE) {
+    try {
+      const rows = await supabaseRequest("GET", `?id=eq.${encodeURIComponent(SUPABASE_STATE_ID)}&select=data`, null);
+      databaseFallbackReason = "";
+      if (rows?.[0]?.data) return rows[0].data;
+      const seeded = seedDb();
+      await writeDb(seeded);
+      return seeded;
+    } catch (error) {
+      databaseFallbackReason = error.message;
+    }
+  }
+  ensureDb();
+  return JSON.parse(fs.readFileSync(DB_FILE, "utf8"));
+}
+
+async function writeDb(db) {
+  if (USE_SUPABASE_POSTGRES) {
+    try {
+      await ensurePostgresStateTable();
+      const table = sqlIdentifier(SUPABASE_STATE_TABLE);
+      await pgPool.query(
+        `insert into public.${table} (id, data, updated_at)
+         values ($1, $2::jsonb, now())
+         on conflict (id)
+         do update set data = excluded.data, updated_at = excluded.updated_at`,
+        [SUPABASE_STATE_ID, JSON.stringify(db)]
+      );
+      databaseFallbackReason = "";
+      return;
+    } catch (error) {
+      databaseFallbackReason = error.message;
+    }
+  }
+  if (USE_SUPABASE) {
+    try {
+      await supabaseRequest("POST", "?on_conflict=id", {
+        id: SUPABASE_STATE_ID,
+        data: db,
+        updated_at: new Date().toISOString()
+      });
+      databaseFallbackReason = "";
+      return;
+    } catch (error) {
+      databaseFallbackReason = error.message;
+    }
+  }
+  ensureDb();
+  fs.writeFileSync(DB_FILE, JSON.stringify(db, null, 2));
+}
+
+function databaseProvider() {
+  if (databaseFallbackReason) return "local-json";
+  if (USE_SUPABASE_POSTGRES) return "supabase-postgres";
+  if (USE_SUPABASE_REST) return "supabase-rest";
+  return "local-json";
+}
+
+function databaseStatus() {
+  return {
+    configuredProvider: USE_SUPABASE_POSTGRES ? "supabase-postgres" : USE_SUPABASE_REST ? "supabase-rest" : "local-json",
+    fallbackReason: databaseFallbackReason
+  };
+}
+
+function publicUser(user) {
+  if (!user) return null;
+  const { passwordHash, ...safe } = user;
+  return safe;
+}
+
+function publicBusiness(business) {
+  if (!business) return null;
+  const { verificationDocuments, ...safe } = business;
+  return {
+    ...safe,
+    verificationStatus: verificationDocuments?.proofOfId && verificationDocuments?.proofOfAddress ? "submitted" : "missing"
+  };
+}
+
+function parseCookies(req) {
+  return Object.fromEntries(String(req.headers.cookie || "").split(";").filter(Boolean).map((part) => {
+    const [key, ...value] = part.trim().split("=");
+    return [key, decodeURIComponent(value.join("="))];
+  }));
+}
+
+function send(res, status, body, headers = {}) {
+  const payload = typeof body === "string" ? body : JSON.stringify(body);
+  res.writeHead(status, {
+    "Content-Type": typeof body === "string" ? "text/plain; charset=utf-8" : "application/json; charset=utf-8",
+    "Cache-Control": "no-store",
+    ...headers
+  });
+  res.end(payload);
+}
+
+function sendJson(res, body, status = 200, headers = {}) {
+  send(res, status, body, headers);
+}
+
+function readBody(req) {
+  return new Promise((resolve, reject) => {
+    let body = "";
+    req.on("data", (chunk) => {
+      body += chunk;
+      if (body.length > MAX_BODY) {
+        reject(new Error("Payload too large"));
+        req.destroy();
+      }
+    });
+    req.on("end", () => {
+      if (!body) return resolve({});
+      try {
+        resolve(JSON.parse(body));
+      } catch (error) {
+        reject(new Error("Invalid JSON"));
+      }
+    });
+  });
+}
+
+function requireAuth(req, res, db, type) {
+  const token = parseCookies(req).cz_session || req.headers.authorization?.replace("Bearer ", "");
+  const session = db.sessions.find((item) => item.id === token && item.expiresAt > Date.now());
+  const user = session && db.users.find((item) => item.id === session.userId);
+  if (!user || (type && user.type !== type)) {
+    sendJson(res, { error: "Unauthorized" }, 401);
+    return null;
+  }
+  return user;
+}
+
+function sanitizeBusiness(input, ownerId) {
+  const services = Array.isArray(input.services) ? input.services : String(input.services || "").split(",");
+  const province = canonicalFromList(input.province, provinces);
+  const city = canonicalFromList(input.city, cities);
+  return {
+    ownerId,
+    status: "pending",
+    primeStatus: "inactive",
+    subscription: null,
+    verified: false,
+    name: String(input.name || "").trim(),
+    category: String(input.category || "Other").trim(),
+    services: services.map((item) => String(item).trim()).filter(Boolean),
+    description: String(input.description || "").trim(),
+    province,
+    city,
+    address: String(input.address || "").trim(),
+    phone: String(input.phone || "").trim(),
+    email: String(input.email || "").trim(),
+    website: String(input.website || "").trim(),
+    socials: Array.isArray(input.socials) ? input.socials : [],
+    logo: String(input.logo || ""),
+    cover: String(input.cover || ""),
+    hours: String(input.hours || ""),
+    pricingMode: String(input.pricingMode || "Request quote"),
+    priceRange: String(input.priceRange || "Request quote"),
+    rating: 0,
+    reviewCount: 0,
+    lat: Number(input.lat || 0),
+    lng: Number(input.lng || 0),
+    gallery: Array.isArray(input.gallery) ? input.gallery : [],
+    verificationDocuments: {
+      proofOfId: input.verificationDocuments?.proofOfId || null,
+      proofOfAddress: input.verificationDocuments?.proofOfAddress || null,
+      submittedAt: input.verificationDocuments?.submittedAt || new Date().toISOString()
+    },
+    createdAt: new Date().toISOString()
+  };
+}
+
+const sseClients = new Set();
+function broadcast(event, payload) {
+  const packet = `event: ${event}\ndata: ${JSON.stringify(payload)}\n\n`;
+  for (const client of sseClients) client.write(packet);
+}
+
+function matchesSearch(biz, query) {
+  const haystack = [biz.name, biz.category, biz.city, biz.province, biz.description, ...(biz.services || [])].join(" ").toLowerCase();
+  return haystack.includes(String(query || "").toLowerCase());
+}
+
+function businessScore(biz) {
+  return (biz.primeStatus === "active" ? 100 : 0) + Number(biz.rating || 0) * 10 + Number(biz.reviewCount || 0) / 10;
+}
+
+async function api(req, res, pathname, query) {
+  const db = await readDb();
+
+  if (req.method === "GET" && pathname === "/api/meta") {
+    return sendJson(res, { categories, provinces, cities, settings: db.settings, databaseProvider: databaseProvider(), databaseStatus: databaseStatus() });
+  }
+
+  if (req.method === "POST" && pathname === "/api/auth/register") {
+    const body = await readBody(req);
+    if (!body.email || !body.password || !body.phone) return sendJson(res, { error: "Email, phone, and password are required." }, 400);
+    if (db.users.some((u) => u.email.toLowerCase() === String(body.email).toLowerCase())) return sendJson(res, { error: "Email already registered." }, 409);
+    const province = body.province ? canonicalFromList(body.province, provinces) : "";
+    const city = body.city ? canonicalFromList(body.city, cities) : "";
+    if (body.province && !province) return sendJson(res, { error: "Please select a valid South African province." }, 400);
+    if (body.city && !city) return sendJson(res, { error: "Please select a valid South African city or town." }, 400);
+    const user = {
+      id: uid("usr"),
+      type: ["customer", "business"].includes(body.type) ? body.type : "customer",
+      name: String(body.name || "New Connect-ZA User"),
+      email: String(body.email).toLowerCase(),
+      phone: String(body.phone),
+      passwordHash: hashPassword(String(body.password)),
+      phoneVerified: false,
+      createdAt: new Date().toISOString(),
+      savedBusinesses: [],
+      city,
+      province
+    };
+    const code = String(Math.floor(100000 + Math.random() * 900000));
+    db.users.push(user);
+    db.otp.push({ phone: user.phone, code, expiresAt: Date.now() + 10 * 60 * 1000 });
+    const session = makeSession(user.id);
+    db.sessions.push(session);
+    await writeDb(db);
+    return sendJson(res, { user: publicUser(user), otpDevCode: code }, 201, { "Set-Cookie": `cz_session=${session.id}; HttpOnly; SameSite=Lax; Path=/; Max-Age=1209600` });
+  }
+
+  if (req.method === "POST" && pathname === "/api/auth/login") {
+    const body = await readBody(req);
+    const user = db.users.find((u) => u.email.toLowerCase() === String(body.email || "").toLowerCase());
+    if (!user || !verifyPassword(String(body.password || ""), user.passwordHash)) return sendJson(res, { error: "Invalid login details." }, 401);
+    const session = makeSession(user.id);
+    db.sessions.push(session);
+    await writeDb(db);
+    return sendJson(res, { user: publicUser(user) }, 200, { "Set-Cookie": `cz_session=${session.id}; HttpOnly; SameSite=Lax; Path=/; Max-Age=1209600` });
+  }
+
+  if (req.method === "POST" && pathname === "/api/auth/logout") {
+    const token = parseCookies(req).cz_session;
+    db.sessions = db.sessions.filter((session) => session.id !== token);
+    await writeDb(db);
+    return sendJson(res, { ok: true }, 200, { "Set-Cookie": "cz_session=; HttpOnly; SameSite=Lax; Path=/; Max-Age=0" });
+  }
+
+  if (req.method === "GET" && pathname === "/api/auth/me") {
+    const user = requireAuth(req, res, db);
+    if (!user) return;
+    return sendJson(res, { user: publicUser(user) });
+  }
+
+  if (req.method === "POST" && pathname === "/api/auth/verify-otp") {
+    const user = requireAuth(req, res, db);
+    if (!user) return;
+    const body = await readBody(req);
+    const otp = db.otp.find((item) => item.phone === user.phone && item.code === String(body.code) && item.expiresAt > Date.now());
+    if (!otp) return sendJson(res, { error: "Invalid or expired OTP." }, 400);
+    user.phoneVerified = true;
+    db.otp = db.otp.filter((item) => item !== otp);
+    await writeDb(db);
+    return sendJson(res, { user: publicUser(user) });
+  }
+
+  if (req.method === "POST" && pathname === "/api/auth/password-reset") {
+    const body = await readBody(req);
+    const user = db.users.find((u) => u.email.toLowerCase() === String(body.email || "").toLowerCase());
+    const token = user ? uid("reset") : null;
+    return sendJson(res, { ok: true, resetDevToken: token, message: "If the email exists, a reset link has been queued." });
+  }
+
+  if (req.method === "GET" && pathname === "/api/businesses") {
+    const result = db.businesses
+      .filter((biz) => query.admin === "true" || biz.status === "approved")
+      .filter((biz) => !query.q || matchesSearch(biz, query.q))
+      .filter((biz) => !query.category || biz.category === query.category)
+      .filter((biz) => !query.province || biz.province === query.province)
+      .filter((biz) => !query.city || biz.city.toLowerCase().includes(String(query.city).toLowerCase()))
+      .filter((biz) => !query.prime || biz.primeStatus === "active")
+      .filter((biz) => !query.rating || Number(biz.rating) >= Number(query.rating))
+      .sort((a, b) => businessScore(b) - businessScore(a));
+    return sendJson(res, { businesses: result.map(publicBusiness) });
+  }
+
+  const businessMatch = pathname.match(/^\/api\/businesses\/([^/]+)$/);
+  if (req.method === "GET" && businessMatch) {
+    const business = db.businesses.find((biz) => biz.id === businessMatch[1]);
+    if (!business) return sendJson(res, { error: "Business not found." }, 404);
+    const reviews = db.reviews.filter((review) => review.businessId === business.id);
+    return sendJson(res, { business: publicBusiness(business), reviews });
+  }
+
+  if (req.method === "POST" && pathname === "/api/businesses") {
+    const user = requireAuth(req, res, db, "business");
+    if (!user) return;
+    const body = await readBody(req);
+    if (!canonicalFromList(body.province, provinces)) return sendJson(res, { error: "Please select one of South Africa's nine provinces." }, 400);
+    if (!canonicalFromList(body.city, cities)) return sendJson(res, { error: "Please select a South African city or town from the list." }, 400);
+    if (!body.verificationDocuments?.proofOfId || !body.verificationDocuments?.proofOfAddress) return sendJson(res, { error: "Proof of ID and proof of address are required." }, 400);
+    const business = { id: uid("biz"), ...sanitizeBusiness(body, user.id) };
+    db.businesses.push(business);
+    db.notifications.push({ id: uid("not"), type: "business_pending", text: `${business.name} needs approval`, createdAt: new Date().toISOString(), read: false });
+    await writeDb(db);
+    broadcast("business", business);
+    return sendJson(res, { business }, 201);
+  }
+
+  if (req.method === "POST" && pathname === "/api/favorites") {
+    const user = requireAuth(req, res, db);
+    if (!user) return;
+    const body = await readBody(req);
+    user.savedBusinesses ||= [];
+    if (user.savedBusinesses.includes(body.businessId)) user.savedBusinesses = user.savedBusinesses.filter((id) => id !== body.businessId);
+    else user.savedBusinesses.push(body.businessId);
+    await writeDb(db);
+    return sendJson(res, { savedBusinesses: user.savedBusinesses });
+  }
+
+  if (req.method === "POST" && pathname === "/api/quotes") {
+    const user = requireAuth(req, res, db, "customer");
+    if (!user) return;
+    const body = await readBody(req);
+    const business = db.businesses.find((biz) => biz.id === body.businessId);
+    if (!business) return sendJson(res, { error: "Business not found." }, 404);
+    const quote = {
+      id: uid("quo"),
+      customerId: user.id,
+      businessId: business.id,
+      title: String(body.title || "Quote request"),
+      details: String(body.details || ""),
+      budget: String(body.budget || ""),
+      files: Array.isArray(body.files) ? body.files : [],
+      status: "sent",
+      responses: [],
+      createdAt: new Date().toISOString()
+    };
+    db.quotes.push(quote);
+    db.analytics.quoteRequests += 1;
+    db.notifications.push({ id: uid("not"), userId: business.ownerId, type: "quote", text: `New quote request for ${business.name}`, createdAt: new Date().toISOString(), read: false });
+    await writeDb(db);
+    broadcast("quote", quote);
+    return sendJson(res, { quote }, 201);
+  }
+
+  if (req.method === "GET" && pathname === "/api/quotes") {
+    const user = requireAuth(req, res, db);
+    if (!user) return;
+    const businessIds = db.businesses.filter((biz) => biz.ownerId === user.id).map((biz) => biz.id);
+    const quotes = db.quotes.filter((quote) => quote.customerId === user.id || businessIds.includes(quote.businessId) || user.type === "admin");
+    return sendJson(res, { quotes });
+  }
+
+  if (req.method === "POST" && pathname === "/api/messages") {
+    const user = requireAuth(req, res, db);
+    if (!user) return;
+    const body = await readBody(req);
+    const business = db.businesses.find((biz) => biz.id === body.businessId);
+    if (!business) return sendJson(res, { error: "Business not found." }, 404);
+    let conversation = db.conversations.find((con) => con.businessId === business.id && con.customerId === (body.customerId || user.id));
+    if (!conversation) {
+      conversation = { id: uid("con"), businessId: business.id, customerId: user.type === "customer" ? user.id : body.customerId, messages: [], updatedAt: new Date().toISOString() };
+      db.conversations.push(conversation);
+    }
+    const message = {
+      id: uid("msg"),
+      senderId: user.id,
+      type: ["image", "voice", "text"].includes(body.type) ? body.type : "text",
+      text: String(body.text || ""),
+      attachment: String(body.attachment || ""),
+      createdAt: new Date().toISOString(),
+      read: false
+    };
+    conversation.messages.push(message);
+    conversation.updatedAt = message.createdAt;
+    db.notifications.push({ id: uid("not"), type: "message", userId: user.type === "customer" ? business.ownerId : conversation.customerId, text: `New message from ${user.name}`, createdAt: message.createdAt, read: false });
+    await writeDb(db);
+    broadcast("message", { conversationId: conversation.id, message, businessId: business.id });
+    return sendJson(res, { conversation, message }, 201);
+  }
+
+  if (req.method === "GET" && pathname === "/api/messages") {
+    const user = requireAuth(req, res, db);
+    if (!user) return;
+    const owned = db.businesses.filter((biz) => biz.ownerId === user.id).map((biz) => biz.id);
+    const conversations = db.conversations.filter((con) => con.customerId === user.id || owned.includes(con.businessId) || user.type === "admin");
+    return sendJson(res, { conversations });
+  }
+
+  if (req.method === "POST" && pathname === "/api/reviews") {
+    const user = requireAuth(req, res, db, "customer");
+    if (!user) return;
+    const body = await readBody(req);
+    const quote = db.quotes.find((item) => item.businessId === body.businessId && item.customerId === user.id);
+    if (!quote) return sendJson(res, { error: "Only verified customers can review a business after a quote request." }, 403);
+    const review = { id: uid("rev"), businessId: body.businessId, userId: user.id, rating: Number(body.rating || 5), text: String(body.text || ""), verified: true, response: "", createdAt: new Date().toISOString() };
+    db.reviews.push(review);
+    const reviews = db.reviews.filter((item) => item.businessId === body.businessId);
+    const biz = db.businesses.find((item) => item.id === body.businessId);
+    biz.rating = Number((reviews.reduce((sum, item) => sum + item.rating, 0) / reviews.length).toFixed(1));
+    biz.reviewCount = reviews.length;
+    await writeDb(db);
+    return sendJson(res, { review });
+  }
+
+  if (req.method === "POST" && pathname === "/api/payments/prime") {
+    const user = requireAuth(req, res, db, "business");
+    if (!user) return;
+    const body = await readBody(req);
+    const business = db.businesses.find((biz) => biz.id === body.businessId && biz.ownerId === user.id);
+    if (!business) return sendJson(res, { error: "Business not found." }, 404);
+    const gateway = ["PayFast", "Ozow", "Yoco", "Stripe"].includes(body.gateway) ? body.gateway : "Stripe";
+    business.primeStatus = "pending";
+    business.subscription = { gateway, amount: 250, autoRenew: Boolean(body.autoRenew), nextBillingDate: null, checkoutId: uid("pay") };
+    await writeDb(db);
+    const redirectUrl = `/payment-success.html?businessId=${encodeURIComponent(business.id)}&gateway=${encodeURIComponent(gateway)}`;
+    return sendJson(res, { checkoutId: business.subscription.checkoutId, gateway, amount: 250, redirectUrl });
+  }
+
+  if (req.method === "POST" && pathname === "/api/payments/webhook") {
+    const body = await readBody(req);
+    const business = db.businesses.find((biz) => biz.id === body.businessId);
+    if (business) {
+      business.primeStatus = "active";
+      business.subscription ||= {};
+      business.subscription.nextBillingDate = new Date(Date.now() + 1000 * 60 * 60 * 24 * 30).toISOString().slice(0, 10);
+      db.analytics.revenue += 250;
+      db.analytics.primeSubscribers = db.businesses.filter((biz) => biz.primeStatus === "active").length;
+      await writeDb(db);
+      broadcast("prime", business);
+    }
+    return sendJson(res, { ok: true });
+  }
+
+  if (req.method === "GET" && pathname === "/api/admin") {
+    const user = requireAuth(req, res, db, "admin");
+    if (!user) return;
+    return sendJson(res, {
+      users: db.users.map(publicUser),
+      businesses: db.businesses,
+      quotes: db.quotes,
+      notifications: db.notifications,
+      ads: db.ads,
+      analytics: {
+        ...db.analytics,
+        activeBusinesses: db.businesses.filter((biz) => biz.status === "approved").length,
+        pendingBusinesses: db.businesses.filter((biz) => biz.status === "pending").length,
+        users: db.users.length
+      }
+    });
+  }
+
+  if (req.method === "POST" && pathname.startsWith("/api/admin/")) {
+    const user = requireAuth(req, res, db, "admin");
+    if (!user) return;
+    const body = await readBody(req);
+    if (pathname === "/api/admin/business-status") {
+      const business = db.businesses.find((biz) => biz.id === body.businessId);
+      if (!business) return sendJson(res, { error: "Business not found." }, 404);
+      business.status = ["approved", "pending", "suspended"].includes(body.status) ? body.status : business.status;
+      await writeDb(db);
+      return sendJson(res, { business });
+    }
+    if (pathname === "/api/admin/prime-status") {
+      const business = db.businesses.find((biz) => biz.id === body.businessId);
+      if (!business) return sendJson(res, { error: "Business not found." }, 404);
+      business.primeStatus = ["active", "pending", "inactive", "suspended"].includes(body.status) ? body.status : business.primeStatus;
+      await writeDb(db);
+      return sendJson(res, { business });
+    }
+    if (pathname === "/api/admin/ads") {
+      const ad = { id: uid("ad"), title: String(body.title || "Sponsored listing"), placement: String(body.placement || "homepage"), active: true, clicks: 0, impressions: 0 };
+      db.ads.push(ad);
+      await writeDb(db);
+      return sendJson(res, { ad });
+    }
+  }
+
+  if (req.method === "GET" && pathname === "/api/events") {
+    res.writeHead(200, {
+      "Content-Type": "text/event-stream",
+      "Cache-Control": "no-cache",
+      Connection: "keep-alive"
+    });
+    res.write("event: ready\ndata: {\"ok\":true}\n\n");
+    sseClients.add(res);
+    req.on("close", () => sseClients.delete(res));
+    return;
+  }
+
+  sendJson(res, { error: "Not found" }, 404);
+}
+
+function contentType(filePath) {
+  const ext = path.extname(filePath).toLowerCase();
+  return {
+    ".html": "text/html; charset=utf-8",
+    ".css": "text/css; charset=utf-8",
+    ".js": "application/javascript; charset=utf-8",
+    ".json": "application/json; charset=utf-8",
+    ".svg": "image/svg+xml",
+    ".png": "image/png",
+    ".webmanifest": "application/manifest+json"
+  }[ext] || "application/octet-stream";
+}
+
+function serveStatic(req, res, pathname) {
+  let filePath = pathname === "/" ? path.join(PUBLIC_DIR, "index.html") : path.join(PUBLIC_DIR, pathname);
+  if (!filePath.startsWith(PUBLIC_DIR)) return send(res, 403, "Forbidden");
+  if (!fs.existsSync(filePath) || fs.statSync(filePath).isDirectory()) filePath = path.join(PUBLIC_DIR, "index.html");
+  fs.readFile(filePath, (error, data) => {
+    if (error) return send(res, 404, "Not found");
+    const isHtml = path.extname(filePath).toLowerCase() === ".html";
+    res.writeHead(200, {
+      "Content-Type": contentType(filePath),
+      "Cache-Control": isHtml ? "no-store" : "public, max-age=3600"
+    });
+    res.end(data);
+  });
+}
+
+const server = http.createServer(async (req, res) => {
+  try {
+    const parsed = url.parse(req.url, true);
+    if (parsed.pathname === "/health") return sendJson(res, { ok: true, service: "connect-za", databaseProvider: databaseProvider() });
+    if (parsed.pathname.startsWith("/api/")) return await api(req, res, parsed.pathname, parsed.query);
+    return serveStatic(req, res, decodeURIComponent(parsed.pathname));
+  } catch (error) {
+    sendJson(res, { error: error.message || "Server error" }, 500);
+  }
+});
+
+if (!USE_SUPABASE) ensureDb();
+server.listen(PORT, () => {
+  console.log(`Connect-ZA running at http://localhost:${PORT} using ${databaseProvider()}`);
+});

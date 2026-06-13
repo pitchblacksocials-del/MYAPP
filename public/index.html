@@ -1,0 +1,272 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#00a3ff">
+  <meta name="description" content="Connect-ZA connects customers with trusted South African businesses and service providers.">
+  <title>Connect-ZA | Connecting Professionals</title>
+  <link rel="manifest" href="/manifest.webmanifest">
+  <link rel="stylesheet" href="/styles.css?v=nardo-blue">
+</head>
+<body>
+  <header class="app-header">
+    <a class="brand" href="#home" aria-label="Connect-ZA home">
+      <span class="brand-mark">CZ</span>
+      <span><strong>Connect-ZA</strong><small>Connecting Professionals</small></span>
+    </a>
+    <nav class="desktop-nav">
+      <a href="#discover">Discover</a>
+    </nav>
+    <div class="header-actions">
+      <button id="themeToggle" class="icon-btn" title="Toggle dark mode">◐</button>
+      <button id="openAuth" class="secondary-btn">Sign in</button>
+      <button id="openBusiness" class="primary-btn">List Business</button>
+    </div>
+  </header>
+
+  <main>
+    <section id="home" class="hero-section">
+      <div class="hero-copy">
+        <p class="eyebrow">South Africa's professional marketplace</p>
+        <h1>Find trusted companies, compare quotes, and chat instantly.</h1>
+        <p class="hero-text">Find verified South African service providers, compare quotes, and connect fast.</p>
+        <form id="heroSearch" class="hero-search">
+          <input id="searchInput" type="search" placeholder="Search service, company, city..." autocomplete="off">
+          <select id="provinceFilter" aria-label="Province"></select>
+          <select id="categoryFilter" aria-label="Category"></select>
+          <button class="primary-btn" type="submit">Search</button>
+        </form>
+        <div class="hero-stats hidden" aria-label="Marketplace statistics">
+          <span><strong id="statBusinesses">0</strong> businesses</span>
+          <span><strong>R250</strong> PRIME / month</span>
+          <span><strong>9</strong> provinces</span>
+        </div>
+      </div>
+      <div class="hero-panel hidden">
+        <div class="phone-shell">
+          <div class="phone-top"></div>
+          <div class="mini-map">
+            <span></span><span></span><span></span><span></span>
+          </div>
+          <div class="floating-card prime-preview">
+            <span class="prime-badge">PRIME</span>
+            <strong>Mzansi Build & Renovate</strong>
+            <small>Johannesburg • 4.9 stars</small>
+          </div>
+          <div class="floating-card chat-preview">
+            <strong>New quote response</strong>
+            <small>“We can start Monday.”</small>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="onboarding-strip hidden" aria-label="Onboarding">
+      <article>
+        <span>1</span>
+        <strong>Create your account</strong>
+        <p>Customers browse and request quotes. Businesses register, verify phone numbers, and build profiles.</p>
+      </article>
+      <article>
+        <span>2</span>
+        <strong>Connect instantly</strong>
+        <p>Use WhatsApp, in-app chat, phone calls, quote files, image sharing, and live notifications.</p>
+      </article>
+      <article>
+        <span>3</span>
+        <strong>Grow with PRIME</strong>
+        <p>PRIME businesses rank first, receive premium cards, homepage visibility, and admin-managed status.</p>
+      </article>
+    </section>
+
+    <section id="discover" class="section">
+      <div class="section-heading">
+        <div>
+          <p class="eyebrow">Discover</p>
+          <h2>Search across industries</h2>
+        </div>
+        <button id="nearbyBtn" class="secondary-btn">Suggested nearby</button>
+      </div>
+      <div id="categoryGrid" class="category-grid"></div>
+      <div class="filters">
+        <select id="cityFilter" aria-label="South African city or town"></select>
+        <select id="ratingFilter" class="hidden">
+          <option value="">Any rating</option>
+          <option value="4">4+ stars</option>
+          <option value="4.5">4.5+ stars</option>
+        </select>
+        <select id="primeFilter" class="hidden">
+          <option value="">All businesses</option>
+          <option value="true">PRIME only</option>
+        </select>
+        <input id="priceFilter" class="hidden" placeholder="Price range keyword">
+      </div>
+      <div id="businessGrid" class="business-grid"></div>
+    </section>
+
+    <section id="prime" class="prime-section hidden">
+      <div>
+        <p class="eyebrow">Paid boost</p>
+        <h2>PRIME visibility for R250/month</h2>
+        <p>Appear above standard listings, receive a PRIME badge, premium card styling, homepage placement, and category-page promotion.</p>
+      </div>
+      <div class="prime-actions">
+        <select id="primeGateway" aria-label="Payment gateway">
+          <option>Stripe</option>
+          <option>PayFast</option>
+          <option>Ozow</option>
+          <option>Yoco</option>
+        </select>
+        <label class="toggle-row"><input id="primeRenew" type="checkbox" checked> Auto-renew</label>
+        <button id="startPrime" class="primary-btn">Start PRIME</button>
+      </div>
+    </section>
+
+    <section id="profileSection" class="profile-section hidden"></section>
+
+    <section id="chat" class="workspace-section hidden">
+      <div class="section-heading">
+        <div>
+          <p class="eyebrow">Communications</p>
+          <h2>Real-time chat and quote requests</h2>
+        </div>
+        <span id="liveStatus" class="status-pill">Live updates ready</span>
+      </div>
+      <div class="workspace-grid">
+        <aside class="conversation-list" id="conversationList"></aside>
+        <section class="chat-panel">
+          <div id="chatHeader" class="chat-header">Select a business to start a chat</div>
+          <div id="chatMessages" class="chat-messages"></div>
+          <form id="chatForm" class="chat-form">
+            <select id="messageType" title="Message type">
+              <option value="text">Text</option>
+              <option value="image">Image</option>
+              <option value="voice">Voice note</option>
+            </select>
+            <input id="chatInput" placeholder="Write a message...">
+            <button class="primary-btn" type="submit">Send</button>
+          </form>
+        </section>
+        <section class="quote-panel">
+          <h3>Request a quote</h3>
+          <form id="quoteForm">
+            <input id="quoteTitle" placeholder="Project title" required>
+            <textarea id="quoteDetails" placeholder="Describe the job, timing, and location" required></textarea>
+            <input id="quoteBudget" placeholder="Budget range">
+            <input id="quoteFiles" type="file" multiple>
+            <button class="primary-btn" type="submit">Send quote request</button>
+          </form>
+          <div id="quoteList" class="quote-list"></div>
+        </section>
+      </div>
+    </section>
+
+    <section class="section reviews-section hidden">
+      <div class="section-heading">
+        <div>
+          <p class="eyebrow">Trust</p>
+          <h2>Verified customer reviews</h2>
+        </div>
+      </div>
+      <div class="review-row">
+        <blockquote>“The quote process was quick and the WhatsApp button made follow-up effortless.”<span>Verified customer, Gauteng</span></blockquote>
+        <blockquote>“PRIME helped our electrical company land three commercial leads in one week.”<span>Business owner, Western Cape</span></blockquote>
+        <blockquote>“Admin approval and verification badges make the platform feel safe.”<span>Customer, KwaZulu-Natal</span></blockquote>
+      </div>
+    </section>
+
+    <section id="admin" class="admin-section hidden">
+      <div class="section-heading">
+        <div>
+          <p class="eyebrow">Admin</p>
+          <h2>Marketplace operations</h2>
+        </div>
+        <button id="refreshAdmin" class="secondary-btn">Refresh dashboard</button>
+      </div>
+      <div id="adminDashboard" class="admin-dashboard"></div>
+    </section>
+  </main>
+
+  <footer>
+    <strong>Connect-ZA</strong>
+    <span>Connecting Professionals across South Africa</span>
+    <span>SEO-ready • Installable PWA • Secure local auth demo</span>
+  </footer>
+
+  <dialog id="authDialog" class="modal">
+    <form method="dialog" class="modal-card">
+      <button class="close-btn" value="cancel">×</button>
+      <h2>Welcome to Connect-ZA</h2>
+      <div class="tabs">
+        <button type="button" class="tab active" data-auth-tab="login">Sign in</button>
+        <button type="button" class="tab" data-auth-tab="register">Create account</button>
+        <button type="button" class="tab" data-auth-tab="reset">Reset</button>
+      </div>
+      <div id="authLogin" class="auth-pane">
+        <input id="loginEmail" type="email" placeholder="Email" value="customer@connect-za.local">
+        <input id="loginPassword" type="password" placeholder="Password" value="Customer123!">
+        <button id="loginBtn" type="button" class="primary-btn">Sign in</button>
+      </div>
+      <div id="authRegister" class="auth-pane hidden">
+        <input id="registerName" placeholder="Full name">
+        <input id="registerEmail" type="email" placeholder="Email">
+        <input id="registerPhone" placeholder="+27 phone number">
+        <input id="registerPassword" type="password" placeholder="Password">
+        <select id="registerType">
+          <option value="customer">Customer account</option>
+          <option value="business">Business account</option>
+        </select>
+        <button id="registerBtn" type="button" class="primary-btn">Create account</button>
+        <div class="otp-row">
+          <input id="otpCode" placeholder="OTP code">
+          <button id="verifyOtpBtn" type="button" class="secondary-btn">Verify phone</button>
+        </div>
+      </div>
+      <div id="authReset" class="auth-pane hidden">
+        <input id="resetEmail" type="email" placeholder="Account email">
+        <button id="resetBtn" type="button" class="primary-btn">Send reset link</button>
+      </div>
+      <p id="authMessage" class="form-message"></p>
+    </form>
+  </dialog>
+
+  <dialog id="businessDialog" class="modal">
+    <form method="dialog" class="modal-card business-modal">
+      <button class="close-btn" value="cancel">×</button>
+      <h2>Register your business</h2>
+      <div class="business-form-grid">
+        <input id="bizName" placeholder="Company name">
+        <select id="bizCategory"></select>
+        <textarea id="bizDescription" placeholder="About the company"></textarea>
+        <input id="bizServices" placeholder="Services offered, comma separated">
+        <input id="bizPhone" placeholder="Business phone / WhatsApp">
+        <input id="bizEmail" placeholder="Business email">
+        <input id="bizWebsite" placeholder="Website">
+        <select id="bizProvince"></select>
+        <select id="bizCity" aria-label="South African city or town"></select>
+        <input id="bizAddress" placeholder="Physical address">
+        <input id="bizHours" placeholder="Operating hours">
+        <input id="bizPrice" placeholder="Pricing or request quote option">
+        <input id="bizGallery" type="file" multiple accept="image/*,video/*">
+        <fieldset class="verification-docs">
+          <legend>Verification documents</legend>
+          <label>
+            <span>Proof of ID</span>
+            <input id="bizProofId" type="file" accept="image/*,.pdf,application/pdf">
+          </label>
+          <label>
+            <span>Proof of address</span>
+            <input id="bizProofAddress" type="file" accept="image/*,.pdf,application/pdf">
+          </label>
+        </fieldset>
+      </div>
+      <button id="saveBusinessBtn" type="button" class="primary-btn">Submit for approval</button>
+      <p id="businessMessage" class="form-message"></p>
+    </form>
+  </dialog>
+
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+  <script src="/app.js?v=nardo-blue"></script>
+</body>
+</html>

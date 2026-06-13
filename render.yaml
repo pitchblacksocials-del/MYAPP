@@ -1,0 +1,12 @@
+services:
+  - type: web
+    name: connect-za
+    runtime: node
+    buildCommand: npm install
+    startCommand: npm start
+    healthCheckPath: /health
+    envVars:
+      - key: SUPABASE_STATE_TABLE
+        value: connect_za_state
+      - key: SUPABASE_STATE_ID
+        value: production

@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>PRIME Activated | Connect-ZA</title>
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body class="payment-page">
+  <main class="success-card">
+    <div class="brand-mark">CZ</div>
+    <h1>PRIME payment received</h1>
+    <p>Your payment provider callback has been simulated and the account is ready for admin approval or activation.</p>
+    <button id="activatePayment" class="primary-btn">Activate PRIME</button>
+    <a href="/" class="link-btn">Back to Connect-ZA</a>
+  </main>
+  <script>
+    document.getElementById("activatePayment").addEventListener("click", async () => {
+      const params = new URLSearchParams(location.search);
+      await fetch("/api/payments/webhook", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ businessId: params.get("businessId"), gateway: params.get("gateway") })
+      });
+      location.href = "/";
+    });
+  </script>
+</body>
+</html>

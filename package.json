@@ -1,0 +1,24 @@
+{
+  "name": "connect-za",
+  "version": "1.0.0",
+  "description": "Connect-ZA business marketplace platform - Connecting Professionals.",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js",
+    "test": "node --check server.js"
+  },
+  "keywords": [
+    "marketplace",
+    "south-africa",
+    "business-directory",
+    "pwa"
+  ],
+  "author": "Connect-ZA",
+  "license": "UNLICENSED",
+  "dependencies": {
+    "@supabase/ssr": "^0.12.0",
+    "@supabase/supabase-js": "^2.108.1",
+    "pg": "^8.21.0"
+  }
+}
