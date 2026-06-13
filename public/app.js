@@ -112,8 +112,10 @@ async function loadMe() {
 function renderUser() {
   $("#openAuth").textContent = state.user ? state.user.name.split(" ")[0] : "Sign in";
   $("#openBusiness").disabled = state.user?.type === "customer";
+  $("#openBusiness").textContent = "List Business";
   if (state.user?.type === "business") $("#openBusiness").textContent = "Business Profile";
   if (state.user?.type === "admin") $("#openBusiness").textContent = "Admin mode";
+  $("#admin").classList.toggle("hidden", state.user?.type !== "admin");
   renderPrimePanel();
 }
 
@@ -456,6 +458,12 @@ document.addEventListener("click", async (event) => {
     if (target.id === "openAuth") $("#authDialog").showModal();
     if (target.id === "openBusiness") {
       if (!state.user) return $("#authDialog").showModal();
+      if (state.user.type === "admin") {
+        $("#admin").classList.remove("hidden");
+        await renderAdmin();
+        location.hash = "admin";
+        return;
+      }
       if (state.user.type !== "business") return toast("Use a business account to create a company profile.");
       $("#businessDialog").showModal();
     }
