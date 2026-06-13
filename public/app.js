@@ -1,6 +1,7 @@
 const state = {
   user: null,
   businesses: [],
+  myBusinesses: [],
   currentBusiness: null,
   conversations: [],
   activeConversation: null,
@@ -59,6 +60,7 @@ async function boot() {
     fillSelect($("#bizCategory"), state.meta.categories, "Business category");
     renderCategories();
     await loadMe();
+    await loadMyBusinesses();
     await loadBusinesses();
     await loadConversations();
     await loadQuotes();
@@ -83,6 +85,7 @@ function renderUser() {
   $("#openBusiness").disabled = state.user?.type === "customer";
   if (state.user?.type === "business") $("#openBusiness").textContent = "Business Profile";
   if (state.user?.type === "admin") $("#openBusiness").textContent = "Admin mode";
+  renderPrimePanel();
 }
 
 function showPanel(id) {
@@ -105,6 +108,61 @@ async function loadBusinesses() {
   if (!state.currentBusiness && state.businesses.length) state.currentBusiness = state.businesses[0];
   $("#statBusinesses").textContent = state.businesses.length;
   renderBusinesses();
+}
+
+async function loadMyBusinesses() {
+  state.myBusinesses = [];
+  if (state.user?.type !== "business") {
+    renderPrimePanel();
+    return;
+  }
+  try {
+    const { businesses } = await api("/api/businesses/mine");
+    state.myBusinesses = businesses;
+  } catch {
+    state.myBusinesses = [];
+  }
+  renderPrimePanel();
+}
+
+function renderPrimePanel() {
+  const select = $("#primeBusinessSelect");
+  const status = $("#primeStatusText");
+  if (!select || !status) return;
+  const selectedId = select.value;
+
+  if (!state.user) {
+    select.innerHTML = `<option value="">Sign in as a business owner</option>`;
+    status.textContent = "Business owners can activate PRIME after creating a business profile.";
+    return;
+  }
+
+  if (state.user.type !== "business") {
+    select.innerHTML = `<option value="">Business account required</option>`;
+    status.textContent = "Create or sign in with a business account to promote a company with PRIME.";
+    return;
+  }
+
+  if (!state.myBusinesses.length) {
+    select.innerHTML = `<option value="">Create a business profile first</option>`;
+    status.textContent = "Submit a business profile, then return here to start PRIME.";
+    return;
+  }
+
+  select.innerHTML = state.myBusinesses.map((business) => {
+    const label = `${business.name} - ${business.primeStatus || "inactive"}`;
+    return `<option value="${business.id}">${label}</option>`;
+  }).join("");
+
+  const selected = state.myBusinesses.find((business) => business.id === selectedId) || state.myBusinesses[0];
+  select.value = selected.id;
+  const primeLabels = {
+    active: "PRIME is active. This business is boosted in search results.",
+    pending: "PRIME payment/request received. Admin approval is pending.",
+    suspended: "PRIME is suspended for this business.",
+    inactive: "PRIME is inactive. Start PRIME for R250/month."
+  };
+  status.textContent = primeLabels[selected.primeStatus] || primeLabels.inactive;
 }
 
 function renderCategories() {
@@ -425,6 +483,7 @@ $("#loginBtn").addEventListener("click", async () => {
     $("#authDialog").close();
     renderUser();
     await Promise.all([loadConversations(), loadQuotes(), renderAdmin()]);
+    await loadMyBusinesses();
     toast(`Signed in as ${user.name}`);
   } catch (error) {
     $("#authMessage").textContent = error.message;
@@ -499,6 +558,8 @@ $("#saveBusinessBtn").addEventListener("click", async () => {
       })
     });
     $("#businessMessage").textContent = `${business.name} submitted for admin approval.`;
+    state.myBusinesses = [business, ...state.myBusinesses.filter((item) => item.id !== business.id)];
+    renderPrimePanel();
     await loadBusinesses();
   } catch (error) {
     $("#businessMessage").textContent = error.message;
@@ -556,7 +617,8 @@ $("#startPrime").addEventListener("click", async () => {
   try {
     if (!state.user) return $("#authDialog").showModal();
     if (state.user.type !== "business") throw new Error("Sign in as a business to start PRIME.");
-    const own = state.businesses.find((biz) => biz.ownerId === state.user.id) || state.currentBusiness;
+    if (!state.myBusinesses.length) await loadMyBusinesses();
+    const own = state.myBusinesses.find((biz) => biz.id === $("#primeBusinessSelect").value) || state.myBusinesses[0];
     if (!own) throw new Error("Create a business profile before starting PRIME.");
     const { redirectUrl, gateway } = await api("/api/payments/prime", {
       method: "POST",
@@ -568,6 +630,8 @@ $("#startPrime").addEventListener("click", async () => {
     toast(error.message);
   }
 });
+
+$("#primeBusinessSelect").addEventListener("input", renderPrimePanel);
 
 $("#refreshAdmin").addEventListener("click", () => renderAdmin().catch((error) => toast(error.message)));
 

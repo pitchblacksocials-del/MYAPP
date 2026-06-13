@@ -475,6 +475,18 @@ textarea {
   background: rgba(255, 255, 255, 0.12);
   border-radius: 8px;
   border: 1px solid rgba(255, 255, 255, 0.18);
+  flex-wrap: wrap;
+}
+
+.prime-actions select {
+  flex: 1 1 190px;
+}
+
+.prime-status-text {
+  flex-basis: 100%;
+  margin: 0;
+  color: #f8fbff;
+  font-weight: 800;
 }
 
 .toggle-row {

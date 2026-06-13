@@ -1,4 +1,4 @@
-const CACHE = "connect-za-v9-nardo-blue";
+const CACHE = "connect-za-v10-prime-feature";
 const ASSETS = ["/", "/styles.css", "/app.js", "/manifest.webmanifest", "/icons/icon.svg"];
 
 self.addEventListener("install", (event) => {

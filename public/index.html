@@ -7,7 +7,7 @@
   <meta name="description" content="Connect-ZA connects customers with trusted South African businesses and service providers.">
   <title>Connect-ZA | Connecting Professionals</title>
   <link rel="manifest" href="/manifest.webmanifest">
-  <link rel="stylesheet" href="/styles.css?v=nardo-blue">
+  <link rel="stylesheet" href="/styles.css?v=prime-feature">
 </head>
 <body>
   <header class="app-header">
@@ -17,6 +17,7 @@
     </a>
     <nav class="desktop-nav">
       <a href="#discover">Discover</a>
+      <a href="#prime">PRIME</a>
     </nav>
     <div class="header-actions">
       <button id="themeToggle" class="icon-btn" title="Toggle dark mode">◐</button>
@@ -96,7 +97,7 @@
           <option value="4">4+ stars</option>
           <option value="4.5">4.5+ stars</option>
         </select>
-        <select id="primeFilter" class="hidden">
+        <select id="primeFilter">
           <option value="">All businesses</option>
           <option value="true">PRIME only</option>
         </select>
@@ -105,13 +106,16 @@
       <div id="businessGrid" class="business-grid"></div>
     </section>
 
-    <section id="prime" class="prime-section hidden">
+    <section id="prime" class="prime-section">
       <div>
         <p class="eyebrow">Paid boost</p>
         <h2>PRIME visibility for R250/month</h2>
-        <p>Appear above standard listings, receive a PRIME badge, premium card styling, homepage placement, and category-page promotion.</p>
+        <p>PRIME businesses rank above standard listings, receive a premium badge, highlighted cards, and stronger visibility across search and category pages.</p>
       </div>
       <div class="prime-actions">
+        <select id="primeBusinessSelect" aria-label="Select your business">
+          <option value="">Select your business</option>
+        </select>
         <select id="primeGateway" aria-label="Payment gateway">
           <option>Stripe</option>
           <option>PayFast</option>
@@ -120,6 +124,7 @@
         </select>
         <label class="toggle-row"><input id="primeRenew" type="checkbox" checked> Auto-renew</label>
         <button id="startPrime" class="primary-btn">Start PRIME</button>
+        <p id="primeStatusText" class="prime-status-text">Business owners can activate PRIME after creating a business profile.</p>
       </div>
     </section>
 
@@ -267,6 +272,6 @@
   </dialog>
 
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
-  <script src="/app.js?v=nardo-blue"></script>
+  <script src="/app.js?v=prime-feature"></script>
 </body>
 </html>

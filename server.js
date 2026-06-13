@@ -416,7 +416,7 @@ function publicUser(user) {
 
 function publicBusiness(business) {
   if (!business) return null;
-  const { verificationDocuments, ...safe } = business;
+  const { verificationDocuments, subscription, ...safe } = business;
   return {
     ...safe,
     verificationStatus: verificationDocuments?.proofOfId && verificationDocuments?.proofOfAddress ? "submitted" : "missing"
@@ -531,6 +531,12 @@ function businessScore(biz) {
   return (biz.primeStatus === "active" ? 100 : 0) + Number(biz.rating || 0) * 10 + Number(biz.reviewCount || 0) / 10;
 }
 
+function refreshPrimeAnalytics(db) {
+  db.analytics ||= {};
+  db.analytics.primeSubscribers = db.businesses.filter((biz) => biz.primeStatus === "active").length;
+  db.analytics.revenue = db.analytics.primeSubscribers * 250;
+}
+
 async function api(req, res, pathname, query) {
   const db = await readDb();
 
@@ -623,6 +629,15 @@ async function api(req, res, pathname, query) {
     return sendJson(res, { businesses: result.map(publicBusiness) });
   }
 
+  if (req.method === "GET" && pathname === "/api/businesses/mine") {
+    const user = requireAuth(req, res, db, "business");
+    if (!user) return;
+    const businesses = db.businesses
+      .filter((biz) => biz.ownerId === user.id)
+      .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+    return sendJson(res, { businesses: businesses.map(publicBusiness) });
+  }
+
   const businessMatch = pathname.match(/^\/api\/businesses\/([^/]+)$/);
   if (req.method === "GET" && businessMatch) {
     const business = db.businesses.find((biz) => biz.id === businessMatch[1]);
@@ -642,7 +657,7 @@ async function api(req, res, pathname, query) {
     db.businesses.push(business);
     db.notifications.push({ id: uid("not"), type: "business_pending", text: `${business.name} needs approval`, createdAt: new Date().toISOString(), read: false });
     await writeDb(db);
-    broadcast("business", business);
+    broadcast("business", publicBusiness(business));
     return sendJson(res, { business }, 201);
   }
 
@@ -749,26 +764,38 @@ async function api(req, res, pathname, query) {
     const body = await readBody(req);
     const business = db.businesses.find((biz) => biz.id === body.businessId && biz.ownerId === user.id);
     if (!business) return sendJson(res, { error: "Business not found." }, 404);
+    if (business.primeStatus === "active") return sendJson(res, { error: "PRIME is already active for this business." }, 400);
     const gateway = ["PayFast", "Ozow", "Yoco", "Stripe"].includes(body.gateway) ? body.gateway : "Stripe";
     business.primeStatus = "pending";
-    business.subscription = { gateway, amount: 250, autoRenew: Boolean(body.autoRenew), nextBillingDate: null, checkoutId: uid("pay") };
+    business.subscription = {
+      gateway,
+      amount: 250,
+      autoRenew: Boolean(body.autoRenew),
+      paymentStatus: "checkout_created",
+      requestedAt: new Date().toISOString(),
+      nextBillingDate: null,
+      checkoutId: uid("pay")
+    };
     await writeDb(db);
-    const redirectUrl = `/payment-success.html?businessId=${encodeURIComponent(business.id)}&gateway=${encodeURIComponent(gateway)}`;
+    const redirectUrl = `/payment-success.html?businessId=${encodeURIComponent(business.id)}&gateway=${encodeURIComponent(gateway)}&checkoutId=${encodeURIComponent(business.subscription.checkoutId)}`;
     return sendJson(res, { checkoutId: business.subscription.checkoutId, gateway, amount: 250, redirectUrl });
   }
 
   if (req.method === "POST" && pathname === "/api/payments/webhook") {
     const body = await readBody(req);
     const business = db.businesses.find((biz) => biz.id === body.businessId);
-    if (business) {
-      business.primeStatus = "active";
-      business.subscription ||= {};
-      business.subscription.nextBillingDate = new Date(Date.now() + 1000 * 60 * 60 * 24 * 30).toISOString().slice(0, 10);
-      db.analytics.revenue += 250;
-      db.analytics.primeSubscribers = db.businesses.filter((biz) => biz.primeStatus === "active").length;
-      await writeDb(db);
-      broadcast("prime", business);
+    if (!business) return sendJson(res, { error: "Business not found." }, 404);
+    if (!business.subscription?.checkoutId || business.subscription.checkoutId !== body.checkoutId) {
+      return sendJson(res, { error: "Payment checkout could not be verified." }, 400);
     }
+    business.primeStatus = "pending";
+    business.subscription.gateway = body.gateway || business.subscription.gateway;
+    business.subscription.paymentStatus = "paid_pending_admin";
+    business.subscription.paidAt = new Date().toISOString();
+    business.subscription.nextBillingDate = null;
+    refreshPrimeAnalytics(db);
+    await writeDb(db);
+    broadcast("prime", publicBusiness(business));
     return sendJson(res, { ok: true });
   }
 
@@ -805,6 +832,16 @@ async function api(req, res, pathname, query) {
       const business = db.businesses.find((biz) => biz.id === body.businessId);
       if (!business) return sendJson(res, { error: "Business not found." }, 404);
       business.primeStatus = ["active", "pending", "inactive", "suspended"].includes(body.status) ? body.status : business.primeStatus;
+      business.subscription ||= {};
+      if (business.primeStatus === "active") {
+        business.subscription.paymentStatus = "admin_approved";
+        business.subscription.approvedAt = new Date().toISOString();
+        business.subscription.nextBillingDate = new Date(Date.now() + 1000 * 60 * 60 * 24 * 30).toISOString().slice(0, 10);
+      }
+      if (["inactive", "suspended"].includes(business.primeStatus)) {
+        business.subscription.paymentStatus = business.primeStatus;
+      }
+      refreshPrimeAnalytics(db);
       await writeDb(db);
       return sendJson(res, { business });
     }
