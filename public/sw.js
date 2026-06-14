@@ -1,5 +1,5 @@
-const CACHE = "connect-za-v22-split-hero";
-const ASSETS = ["/", "/styles.css?v=split-hero-2", "/app.js?v=split-hero-2", "/legal.html", "/manifest.webmanifest", "/icons/icon.svg"];
+const CACHE = "connect-za-v24-logo-refresh";
+const ASSETS = ["/", "/styles.css?v=logo-refresh-2", "/app.js?v=logo-refresh-2", "/legal.html", "/manifest.webmanifest", "/icons/icon.svg", "/icons/connect-za-logo.svg"];
 
 self.addEventListener("install", (event) => {
   event.waitUntil(caches.open(CACHE).then((cache) => cache.addAll(ASSETS)));
