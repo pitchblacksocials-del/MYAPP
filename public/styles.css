@@ -271,6 +271,18 @@ h3 {
   box-shadow: var(--shadow), inset 0 1px color-mix(in srgb, var(--gold) 16%, transparent);
 }
 
+.hero-search input {
+  flex: 1 1 230px;
+}
+
+.hero-search select {
+  flex: 0 1 160px;
+}
+
+.hero-search button {
+  flex: 0 0 auto;
+}
+
 input, select, textarea {
   width: 100%;
   min-height: 36px;

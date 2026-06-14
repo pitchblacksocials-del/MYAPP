@@ -73,6 +73,14 @@ function fillSelect(node, values, placeholder) {
   node.innerHTML = `<option value="">${placeholder}</option>` + values.map((value) => `<option value="${value}">${value}</option>`).join("");
 }
 
+function syncCityFilter(sourceId) {
+  const heroCity = $("#heroCityFilter");
+  const discoverCity = $("#cityFilter");
+  if (!heroCity || !discoverCity) return;
+  if (sourceId === "heroCityFilter") discoverCity.value = heroCity.value;
+  if (sourceId === "cityFilter") heroCity.value = discoverCity.value;
+}
+
 function whatsappUrl(phone, businessName) {
   const clean = String(phone || "").replace(/[^\d]/g, "");
   const normalized = clean.startsWith("27") ? clean : clean.replace(/^0/, "27");
@@ -84,6 +92,7 @@ async function boot() {
   try {
     state.meta = await api("/api/meta");
     fillSelect($("#provinceFilter"), state.meta.provinces, "All provinces");
+    fillSelect($("#heroCityFilter"), state.meta.cities, "All cities/towns");
     fillSelect($("#cityFilter"), state.meta.cities, "All South African cities/towns");
     fillSelect($("#categoryFilter"), state.meta.categories, "All categories");
     fillSelect($("#bizProvince"), state.meta.provinces, "Province");
@@ -617,17 +626,22 @@ document.addEventListener("click", async (event) => {
 
 $("#heroSearch").addEventListener("submit", async (event) => {
   event.preventDefault();
+  syncCityFilter("heroCityFilter");
   await loadBusinesses();
   location.hash = "discover";
 });
 
-["provinceFilter", "categoryFilter", "cityFilter", "ratingFilter", "primeFilter", "priceFilter"].forEach((id) => {
-  $(`#${id}`).addEventListener("input", () => loadBusinesses().catch((error) => toast(error.message)));
+["provinceFilter", "categoryFilter", "heroCityFilter", "cityFilter", "ratingFilter", "primeFilter", "priceFilter"].forEach((id) => {
+  $(`#${id}`).addEventListener("input", () => {
+    if (id === "heroCityFilter" || id === "cityFilter") syncCityFilter(id);
+    loadBusinesses().catch((error) => toast(error.message));
+  });
 });
 
 $("#nearbyBtn").addEventListener("click", async () => {
   $("#provinceFilter").value = state.user?.province || "Gauteng";
   $("#cityFilter").value = state.user?.city || "Johannesburg";
+  syncCityFilter("cityFilter");
   await loadBusinesses();
 });
 
