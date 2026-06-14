@@ -1,31 +1,40 @@
 :root {
   color-scheme: light;
-  --bg: #686a6c;
-  --surface: #55585a;
-  --surface-strong: #74787a;
-  --text: #f8fbff;
-  --muted: #d6e2ea;
-  --line: #8ea0ab;
-  --brand: #00a3ff;
-  --brand-2: #00d4ff;
-  --gold: #00a3ff;
-  --danger: #006dff;
-  --shadow: 0 18px 45px rgba(0, 0, 0, 0.22);
+  --bg: #151d18;
+  --bg-2: #243227;
+  --surface: #202b24;
+  --surface-strong: #2d3a31;
+  --surface-soft: #19231d;
+  --text: #fff7e8;
+  --muted: #cfc3a6;
+  --line: rgba(226, 196, 148, 0.28);
+  --brand: #d98c47;
+  --brand-2: #a8bd73;
+  --gold: #f2c268;
+  --clay: #b9634d;
+  --danger: #d96b5f;
+  --ink: #101612;
+  --shadow: 0 18px 46px rgba(9, 13, 10, 0.36);
+  --contour: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='420' height='300' viewBox='0 0 420 300'%3E%3Cg fill='none' stroke='%23d98c47' stroke-opacity='.42' stroke-width='1.1'%3E%3Cpath d='M40 64c54-50 151-48 207 3 41 37 36 91-6 121-55 40-159 34-204-17-31-35-26-76 3-107Z'/%3E%3Cpath d='M78 88c39-34 111-33 150 3 29 26 25 64-5 85-39 28-113 24-145-12-23-25-19-53 0-76Z'/%3E%3Cpath d='M119 112c24-18 64-17 88 3 18 15 15 36-4 49-24 16-68 14-87-7-14-16-12-31 3-45Z'/%3E%3Cpath d='M286 37c54 8 95 43 92 84-3 45-56 75-115 64-46-8-75-40-67-77 7-34 42-78 90-71Z'/%3E%3Cpath d='M312 77c28 4 51 23 49 46-2 25-31 42-63 36-25-5-41-23-37-43 4-19 24-43 51-39Z'/%3E%3C/g%3E%3C/svg%3E");
 }
 
 [data-theme="dark"] {
   color-scheme: dark;
-  --bg: #686a6c;
-  --surface: #4f5355;
-  --surface-strong: #5f6467;
-  --text: #f8fbff;
-  --muted: #d6e2ea;
-  --line: #8ea0ab;
-  --brand: #00a3ff;
-  --brand-2: #00d4ff;
-  --gold: #00a3ff;
-  --danger: #006dff;
-  --shadow: 0 18px 45px rgba(0, 0, 0, 0.42);
+  --bg: #101813;
+  --bg-2: #1f2d23;
+  --surface: #1a251f;
+  --surface-strong: #29382f;
+  --surface-soft: #141d18;
+  --text: #fff7e8;
+  --muted: #c9b99b;
+  --line: rgba(226, 196, 148, 0.24);
+  --brand: #e09a54;
+  --brand-2: #aec87a;
+  --gold: #f5ca72;
+  --clay: #c36751;
+  --danger: #dc7468;
+  --ink: #0c120e;
+  --shadow: 0 18px 48px rgba(0, 0, 0, 0.48);
 }
 
 * { box-sizing: border-box; }
@@ -37,10 +46,31 @@ body {
   font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   font-size: 14px;
   line-height: 1.42;
+  min-height: 100vh;
+  overflow-x: hidden;
+  position: relative;
   background:
-    linear-gradient(180deg, rgba(0, 163, 255, 0.18), transparent 340px),
+    linear-gradient(180deg, color-mix(in srgb, var(--brand) 18%, transparent), transparent 330px),
+    linear-gradient(140deg, color-mix(in srgb, var(--brand-2) 16%, transparent), transparent 44%),
     var(--bg);
   color: var(--text);
+}
+
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background-image: var(--contour);
+  background-position: top 42px right -90px;
+  background-size: 420px 300px;
+  opacity: 0.2;
+}
+
+.app-header, main, footer, .modal, .toast {
+  position: relative;
+  z-index: 1;
 }
 
 button, input, select, textarea {
@@ -65,9 +95,10 @@ a {
   justify-content: space-between;
   gap: 12px;
   padding: 10px clamp(14px, 4vw, 54px);
-  background: color-mix(in srgb, #55585a 92%, transparent);
+  background: color-mix(in srgb, var(--surface) 88%, transparent);
   border-bottom: 1px solid var(--line);
   backdrop-filter: blur(18px);
+  box-shadow: inset 0 -1px color-mix(in srgb, var(--brand) 14%, transparent);
 }
 
 .brand {
@@ -83,9 +114,11 @@ a {
   width: 36px;
   height: 36px;
   border-radius: 8px;
-  background: linear-gradient(135deg, #4f5355, var(--brand));
-  color: white;
+  background:
+    linear-gradient(135deg, var(--ink), color-mix(in srgb, var(--brand) 82%, var(--clay)) 58%, var(--brand-2));
+  color: var(--text);
   font-weight: 900;
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--gold) 30%, transparent);
 }
 
 .brand small {
@@ -97,7 +130,7 @@ a {
 .desktop-nav {
   display: flex;
   gap: 14px;
-  color: #f8fbff;
+  color: var(--text);
   font-size: 0.86rem;
 }
 
@@ -117,14 +150,14 @@ a {
 }
 
 .primary-btn {
-  background: var(--brand);
-  color: #ffffff;
+  background: linear-gradient(135deg, var(--gold), var(--brand) 62%, var(--clay));
+  color: var(--ink);
   box-shadow: 0 10px 25px color-mix(in srgb, var(--brand) 24%, transparent);
 }
 
 .secondary-btn, .icon-btn, .link-btn {
-  background: #4f5355;
-  color: #f8fbff;
+  background: color-mix(in srgb, var(--surface-strong) 88%, var(--ink));
+  color: var(--text);
   border-color: var(--line);
 }
 
@@ -134,6 +167,7 @@ a {
 }
 
 .hero-section {
+  position: relative;
   display: grid;
   grid-template-columns: minmax(0, 1fr);
   gap: clamp(18px, 4vw, 48px);
@@ -141,13 +175,46 @@ a {
   min-height: auto;
   padding: clamp(26px, 6vw, 54px) clamp(14px, 5vw, 64px) 26px;
   background:
-    linear-gradient(115deg, color-mix(in srgb, var(--brand) 26%, transparent), transparent 45%),
-    radial-gradient(circle at 88% 16%, color-mix(in srgb, var(--brand-2) 28%, transparent), transparent 32%),
-    #686a6c;
-  color: #f8fbff;
+    linear-gradient(115deg, color-mix(in srgb, var(--brand) 22%, transparent), transparent 48%),
+    linear-gradient(180deg, color-mix(in srgb, var(--surface-soft) 94%, transparent), color-mix(in srgb, var(--bg) 92%, var(--ink))),
+    var(--bg);
+  color: var(--text);
+  overflow: hidden;
+}
+
+.hero-section::before,
+.hero-section::after {
+  content: "";
+  position: absolute;
+  pointer-events: none;
+}
+
+.hero-section::before {
+  inset: 0;
+  background-image: var(--contour);
+  background-size: 520px 370px;
+  background-position: right -110px top -34px;
+  opacity: 0.24;
+  mask-image: linear-gradient(90deg, transparent 6%, black 38%, black);
+}
+
+.hero-section::after {
+  top: 18px;
+  right: clamp(12px, 7vw, 92px);
+  width: min(280px, 30vw);
+  height: calc(100% - 36px);
+  border: 1px solid color-mix(in srgb, var(--gold) 24%, transparent);
+  border-radius: 8px;
+  background:
+    repeating-linear-gradient(135deg, color-mix(in srgb, var(--gold) 16%, transparent) 0 1px, transparent 1px 13px),
+    linear-gradient(145deg, color-mix(in srgb, var(--brand) 20%, transparent), color-mix(in srgb, var(--brand-2) 12%, transparent));
+  transform: skewX(-8deg);
+  opacity: 0.44;
 }
 
 .hero-copy {
+  position: relative;
+  z-index: 1;
   max-width: 980px;
 }
 
@@ -182,7 +249,7 @@ h3 {
 
 .hero-text {
   max-width: 560px;
-  color: #d6e2ea;
+  color: var(--muted);
   font-size: 0.9rem;
   line-height: 1.42;
 }
@@ -190,10 +257,12 @@ h3 {
 .hero-search {
   width: min(100%, 980px);
   padding: 8px;
-  background: #55585a;
+  position: relative;
+  z-index: 1;
+  background: color-mix(in srgb, var(--surface) 92%, transparent);
   border: 1px solid var(--line);
   border-radius: 8px;
-  box-shadow: var(--shadow);
+  box-shadow: var(--shadow), inset 0 1px color-mix(in srgb, var(--gold) 16%, transparent);
 }
 
 input, select, textarea {
@@ -201,10 +270,15 @@ input, select, textarea {
   min-height: 36px;
   border: 1px solid var(--line);
   border-radius: 8px;
-  background: var(--surface);
+  background: color-mix(in srgb, var(--surface) 90%, var(--ink));
   color: var(--text);
   padding: 8px 10px;
   font-size: 0.88rem;
+}
+
+input:focus, select:focus, textarea:focus {
+  outline: 2px solid color-mix(in srgb, var(--brand-2) 36%, transparent);
+  border-color: color-mix(in srgb, var(--brand-2) 74%, var(--line));
 }
 
 textarea {
@@ -217,11 +291,11 @@ textarea {
   flex-wrap: wrap;
   gap: 12px;
   margin-top: 16px;
-  color: #d6e2ea;
+  color: var(--muted);
 }
 
 .hero-stats strong {
-  color: #ffffff;
+  color: var(--text);
   font-size: 1rem;
 }
 
@@ -234,9 +308,9 @@ textarea {
   position: relative;
   width: min(100%, 420px);
   aspect-ratio: 0.72;
-  border: 12px solid #4f5355;
+  border: 12px solid color-mix(in srgb, var(--surface-strong) 82%, var(--ink));
   border-radius: 36px;
-  background: linear-gradient(155deg, #111111, #2a1608);
+  background: linear-gradient(155deg, var(--ink), color-mix(in srgb, var(--surface-soft) 70%, var(--clay)));
   box-shadow: var(--shadow);
   overflow: hidden;
 }
@@ -246,7 +320,7 @@ textarea {
   height: 22px;
   margin: 10px auto;
   border-radius: 0 0 14px 14px;
-  background: #4f5355;
+  background: var(--surface-strong);
 }
 
 .mini-map {
@@ -256,7 +330,7 @@ textarea {
   background:
     linear-gradient(90deg, transparent 47%, color-mix(in srgb, var(--brand) 38%, transparent) 48% 52%, transparent 53%),
     linear-gradient(0deg, transparent 45%, color-mix(in srgb, var(--brand-2) 34%, transparent) 46% 50%, transparent 51%),
-    #17100b;
+    var(--ink);
 }
 
 .mini-map span {
@@ -265,13 +339,13 @@ textarea {
   height: 17px;
   border-radius: 50%;
   background: var(--brand);
-  border: 3px solid white;
+  border: 3px solid var(--text);
 }
 
 .mini-map span:nth-child(1) { left: 18%; top: 22%; }
 .mini-map span:nth-child(2) { right: 22%; top: 34%; background: var(--brand-2); }
 .mini-map span:nth-child(3) { left: 46%; bottom: 28%; }
-.mini-map span:nth-child(4) { right: 16%; bottom: 14%; background: #006dff; }
+.mini-map span:nth-child(4) { right: 16%; bottom: 14%; background: var(--clay); }
 
 .floating-card {
   position: absolute;
@@ -304,13 +378,13 @@ textarea {
 }
 
 .prime-badge {
-  background: #4f5355;
-  color: var(--brand-2);
+  background: linear-gradient(135deg, var(--gold), var(--brand));
+  color: var(--ink);
 }
 
 .standard-badge {
-  background: color-mix(in srgb, var(--brand) 14%, #4f5355);
-  color: #ffffff;
+  background: color-mix(in srgb, var(--brand-2) 22%, var(--surface-strong));
+  color: var(--text);
 }
 
 .verified-badge {
@@ -371,20 +445,50 @@ textarea {
 }
 
 .category-tile, .business-card, .chat-panel, .quote-panel, .conversation-list, .admin-card, .profile-card, blockquote {
-  background: var(--surface);
+  background:
+    linear-gradient(145deg, color-mix(in srgb, var(--surface) 94%, var(--brand-2)), var(--surface));
   border: 1px solid var(--line);
   border-radius: 8px;
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.28);
 }
 
 .category-tile {
+  position: relative;
+  overflow: hidden;
   min-height: 70px;
   padding: 10px;
   text-align: left;
-  color: #ffffff;
+  color: var(--text);
+  transition: transform 160ms ease, border-color 160ms ease, background 160ms ease;
+}
+
+.category-tile::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background:
+    var(--contour) center / 240px 170px,
+    linear-gradient(135deg, color-mix(in srgb, var(--brand) 14%, transparent), transparent 58%);
+  opacity: 0.24;
+}
+
+.category-tile::after {
+  content: "";
+  position: absolute;
+  inset: auto 10px 8px 10px;
+  height: 2px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, var(--brand), var(--gold), var(--brand-2));
+  opacity: 0.76;
+}
+
+.category-tile:hover {
+  transform: translateY(-2px);
+  border-color: color-mix(in srgb, var(--gold) 52%, var(--line));
 }
 
 .category-tile span {
+  position: relative;
   display: inline-grid;
   place-items: center;
   min-width: 34px;
@@ -392,8 +496,8 @@ textarea {
   margin-bottom: 7px;
   padding: 2px 6px;
   border-radius: 6px;
-  background: color-mix(in srgb, var(--brand) 18%, var(--surface-strong));
-  color: #ffffff;
+  background: color-mix(in srgb, var(--gold) 82%, var(--brand));
+  color: var(--ink);
   font-size: 0.68rem;
   font-weight: 900;
 }
@@ -410,11 +514,21 @@ textarea {
 }
 
 .business-card {
+  position: relative;
   overflow: hidden;
   display: flex;
   flex-direction: column;
   min-height: 100%;
-  color: #ffffff;
+  color: var(--text);
+}
+
+.business-card::before {
+  content: "";
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 3px;
+  background: linear-gradient(180deg, var(--brand), var(--gold), var(--brand-2));
+  opacity: 0.9;
 }
 
 .business-card.prime {
@@ -424,7 +538,9 @@ textarea {
 
 .card-media {
   height: 132px;
-  background: linear-gradient(135deg, var(--surface-strong), color-mix(in srgb, var(--brand) 24%, var(--surface)));
+  background:
+    var(--contour) center / 280px 200px,
+    linear-gradient(135deg, var(--surface-strong), color-mix(in srgb, var(--brand) 22%, var(--surface)), color-mix(in srgb, var(--brand-2) 18%, var(--surface)));
   background-size: cover;
   background-position: center;
 }
@@ -435,17 +551,18 @@ textarea {
   flex-direction: column;
   gap: 8px;
   flex: 1;
-  color: #ffffff;
+  color: var(--text);
 }
 
 .category-tile strong,
 .business-card h3,
 .business-card p,
 .business-card .meta-line {
-  color: #ffffff;
+  color: var(--text);
 }
 
 .category-tile strong {
+  position: relative;
   display: block;
   font-size: 0.82rem;
   line-height: 1.15;
@@ -485,24 +602,45 @@ textarea {
 }
 
 .prime-section {
+  position: relative;
   display: flex;
   justify-content: space-between;
   gap: 16px;
   align-items: center;
-  background: linear-gradient(120deg, #55585a, #00a3ff);
-  color: white;
+  background:
+    linear-gradient(118deg, color-mix(in srgb, var(--surface-soft) 90%, var(--brand-2)), color-mix(in srgb, var(--brand) 38%, var(--bg)) 58%, color-mix(in srgb, var(--clay) 42%, var(--bg))),
+    var(--bg);
+  color: var(--text);
+  overflow: hidden;
+}
+
+.prime-section::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background-image: var(--contour);
+  background-size: 520px 370px;
+  background-position: right -90px center;
+  opacity: 0.18;
+  pointer-events: none;
+}
+
+.prime-section > * {
+  position: relative;
+  z-index: 1;
 }
 
 .prime-section p, .prime-section .eyebrow {
-  color: color-mix(in srgb, white 82%, transparent);
+  color: color-mix(in srgb, var(--text) 82%, transparent);
 }
 
 .prime-actions {
   min-width: min(100%, 480px);
   padding: 12px;
-  background: rgba(255, 255, 255, 0.12);
+  background: color-mix(in srgb, var(--surface) 72%, transparent);
   border-radius: 8px;
-  border: 1px solid rgba(255, 255, 255, 0.18);
+  border: 1px solid color-mix(in srgb, var(--gold) 26%, transparent);
+  box-shadow: inset 0 1px color-mix(in srgb, var(--gold) 16%, transparent);
   flex-wrap: wrap;
 }
 
@@ -513,7 +651,7 @@ textarea {
 .prime-status-text {
   flex-basis: 100%;
   margin: 0;
-  color: #f8fbff;
+  color: var(--text);
   font-weight: 800;
 }
 
@@ -531,7 +669,7 @@ textarea {
 
 .profile-hero {
   overflow: hidden;
-  background: var(--surface);
+  background: linear-gradient(145deg, var(--surface), color-mix(in srgb, var(--surface) 82%, var(--brand-2)));
   border: 1px solid var(--line);
   border-radius: 8px;
 }
@@ -541,6 +679,7 @@ textarea {
   background-size: cover;
   background-position: center;
   background-color: var(--surface-strong);
+  background-image: var(--contour), linear-gradient(135deg, color-mix(in srgb, var(--brand) 24%, transparent), color-mix(in srgb, var(--brand-2) 14%, transparent));
 }
 
 .profile-content {
@@ -556,12 +695,12 @@ textarea {
   width: 66px;
   height: 66px;
   border-radius: 8px;
-  background: var(--brand);
-  color: white;
+  background: linear-gradient(135deg, var(--gold), var(--brand), var(--clay));
+  color: var(--ink);
   font-weight: 900;
   font-size: 1.25rem;
   margin-top: -52px;
-  border: 4px solid #55585a;
+  border: 4px solid var(--surface);
 }
 
 .gallery-grid {
@@ -635,8 +774,8 @@ textarea {
 
 .message.mine {
   align-self: flex-end;
-  background: var(--brand);
-  color: white;
+  background: linear-gradient(135deg, var(--brand), var(--clay));
+  color: var(--ink);
 }
 
 .chat-form {
@@ -725,7 +864,7 @@ blockquote span {
 
 footer {
   border-top: 1px solid var(--line);
-  color: #ffffff;
+  color: var(--text);
 }
 
 .legal-footer {
@@ -734,7 +873,7 @@ footer {
   padding-top: 26px;
   padding-bottom: 26px;
   background:
-    linear-gradient(135deg, rgba(0, 163, 255, 0.16), transparent 38%),
+    linear-gradient(135deg, color-mix(in srgb, var(--brand) 16%, transparent), transparent 38%),
     var(--bg);
 }
 
@@ -747,7 +886,7 @@ footer {
 }
 
 .footer-brand strong {
-  color: #ffffff;
+  color: var(--text);
   font-size: 0.98rem;
 }
 
@@ -768,10 +907,10 @@ footer {
   justify-content: center;
   min-height: 28px;
   padding: 5px 8px;
-  border: 1px solid rgba(0, 163, 255, 0.36);
+  border: 1px solid color-mix(in srgb, var(--brand) 36%, transparent);
   border-radius: 8px;
-  background: rgba(0, 163, 255, 0.12);
-  color: #ffffff;
+  background: color-mix(in srgb, var(--brand) 12%, transparent);
+  color: var(--text);
   font-size: 0.72rem;
   font-weight: 800;
   line-height: 1.15;
@@ -780,7 +919,7 @@ footer {
 }
 
 .legal-links a:hover {
-  background: rgba(0, 163, 255, 0.22);
+  background: color-mix(in srgb, var(--brand) 22%, transparent);
   border-color: var(--brand);
 }
 
@@ -795,7 +934,9 @@ footer {
   padding: 18px;
   border: 1px solid var(--line);
   border-radius: 8px;
-  background: var(--surface);
+  background:
+    linear-gradient(145deg, color-mix(in srgb, var(--surface) 92%, var(--brand-2)), var(--surface)),
+    var(--surface);
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.22);
 }
 
@@ -823,10 +964,10 @@ footer {
   align-items: center;
   min-height: 30px;
   padding: 5px 8px;
-  border: 1px solid rgba(0, 163, 255, 0.36);
+  border: 1px solid color-mix(in srgb, var(--brand) 36%, transparent);
   border-radius: 8px;
-  background: rgba(0, 163, 255, 0.12);
-  color: #ffffff;
+  background: color-mix(in srgb, var(--brand) 12%, transparent);
+  color: var(--text);
   font-size: 0.76rem;
 }
 
@@ -883,7 +1024,7 @@ footer {
 
 .tab.active {
   background: var(--brand);
-  color: white;
+  color: var(--ink);
 }
 
 .business-tab {
@@ -897,7 +1038,7 @@ footer {
 
 .business-tab.active {
   background: var(--brand);
-  color: white;
+  color: var(--ink);
 }
 
 .business-profile-select,
@@ -958,7 +1099,7 @@ footer {
   height: 28px;
   min-height: 28px;
   background: rgba(0, 0, 0, 0.72);
-  color: #ffffff;
+  color: var(--text);
 }
 
 .empty-gallery-note {
@@ -981,14 +1122,14 @@ footer {
 
 .verification-docs legend {
   padding: 0 6px;
-  color: #ffffff;
+  color: var(--text);
   font-weight: 900;
 }
 
 .verification-docs label {
   display: grid;
   gap: 6px;
-  color: #ffffff;
+  color: var(--text);
   font-weight: 800;
 }
 
@@ -1010,8 +1151,8 @@ footer {
   display: none;
   max-width: min(420px, calc(100vw - 36px));
   padding: 10px 12px;
-  background: #4f5355;
-  color: white;
+  background: var(--surface-strong);
+  color: var(--text);
   border-radius: 8px;
   box-shadow: var(--shadow);
 }
@@ -1084,5 +1225,357 @@ footer {
   }
   .message {
     max-width: 92%;
+  }
+}
+
+/* Organic premium final layer */
+:root {
+  --bg: #151d18;
+  --bg-2: #243227;
+  --surface: #202b24;
+  --surface-strong: #2d3a31;
+  --surface-soft: #19231d;
+  --text: #fff7e8;
+  --muted: #cfc3a6;
+  --line: rgba(226, 196, 148, 0.28);
+  --brand: #d98c47;
+  --brand-2: #a8bd73;
+  --gold: #f2c268;
+  --clay: #b9634d;
+  --danger: #d96b5f;
+  --ink: #101612;
+  --shadow: 0 18px 46px rgba(9, 13, 10, 0.36);
+}
+
+[data-theme="dark"] {
+  --bg: #101813;
+  --bg-2: #1f2d23;
+  --surface: #1a251f;
+  --surface-strong: #29382f;
+  --surface-soft: #141d18;
+  --text: #fff7e8;
+  --muted: #c9b99b;
+  --line: rgba(226, 196, 148, 0.24);
+  --brand: #e09a54;
+  --brand-2: #aec87a;
+  --gold: #f5ca72;
+  --clay: #c36751;
+  --danger: #dc7468;
+  --ink: #0c120e;
+  --shadow: 0 18px 48px rgba(0, 0, 0, 0.48);
+}
+
+body {
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--brand) 18%, transparent), transparent 330px),
+    linear-gradient(140deg, color-mix(in srgb, var(--brand-2) 16%, transparent), transparent 44%),
+    var(--bg);
+}
+
+body::before {
+  z-index: 0;
+  background-image: var(--contour);
+  background-position: top 42px right -90px;
+  background-size: 420px 300px;
+  opacity: 0.2;
+}
+
+body::after {
+  content: none;
+}
+
+.app-header {
+  background: color-mix(in srgb, var(--surface) 88%, transparent);
+  box-shadow: inset 0 -1px color-mix(in srgb, var(--brand) 14%, transparent);
+}
+
+.brand-mark {
+  border-radius: 8px 16px 8px 14px;
+  background:
+    linear-gradient(135deg, var(--ink), color-mix(in srgb, var(--brand) 82%, var(--clay)) 58%, var(--brand-2));
+  color: var(--text);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--gold) 30%, transparent);
+}
+
+.desktop-nav {
+  color: var(--text);
+}
+
+.primary-btn {
+  background: linear-gradient(135deg, var(--gold), var(--brand) 62%, var(--clay));
+  color: var(--ink);
+  box-shadow: 0 10px 25px color-mix(in srgb, var(--brand) 24%, transparent);
+}
+
+.secondary-btn, .icon-btn, .link-btn {
+  background: color-mix(in srgb, var(--surface-strong) 88%, var(--ink));
+  color: var(--text);
+  border-color: var(--line);
+}
+
+.hero-section {
+  grid-template-columns: minmax(0, 1.05fr) minmax(260px, 0.42fr);
+  background:
+    linear-gradient(115deg, color-mix(in srgb, var(--brand) 22%, transparent), transparent 48%),
+    linear-gradient(180deg, color-mix(in srgb, var(--surface-soft) 94%, transparent), color-mix(in srgb, var(--bg) 92%, var(--ink))),
+    var(--bg);
+  color: var(--text);
+}
+
+.hero-section::before {
+  background-image: var(--contour);
+  background-size: 520px 370px;
+  background-position: right -110px top -34px;
+  opacity: 0.24;
+  mask-image: linear-gradient(90deg, transparent 6%, black 38%, black);
+}
+
+.hero-section::after {
+  top: 18px;
+  right: clamp(12px, 7vw, 92px);
+  bottom: auto;
+  width: min(280px, 30vw);
+  height: calc(100% - 36px);
+  border: 1px solid color-mix(in srgb, var(--gold) 24%, transparent);
+  border-radius: 8px;
+  background:
+    repeating-linear-gradient(135deg, color-mix(in srgb, var(--gold) 16%, transparent) 0 1px, transparent 1px 13px),
+    linear-gradient(145deg, color-mix(in srgb, var(--brand) 20%, transparent), color-mix(in srgb, var(--brand-2) 12%, transparent));
+  transform: skewX(-8deg);
+  opacity: 0.44;
+}
+
+.hero-copy, .hero-panel {
+  position: relative;
+  z-index: 1;
+}
+
+.hero-panel::before {
+  content: "";
+  top: 18px;
+  right: 12px;
+  width: 64px;
+  height: 86px;
+  border-radius: 8px;
+  border: 1px solid color-mix(in srgb, var(--gold) 32%, transparent);
+  background:
+    repeating-linear-gradient(135deg, color-mix(in srgb, var(--gold) 28%, transparent) 0 1px, transparent 1px 9px),
+    color-mix(in srgb, var(--surface) 12%, transparent);
+  transform: rotate(8deg);
+  color: transparent;
+}
+
+.eyebrow {
+  color: var(--gold);
+}
+
+.hero-text, .hero-stats {
+  color: var(--muted);
+}
+
+.hero-stats span {
+  border-color: color-mix(in srgb, var(--gold) 20%, transparent);
+  background: color-mix(in srgb, var(--surface) 56%, transparent);
+}
+
+.hero-stats strong {
+  color: var(--text);
+}
+
+.hero-search {
+  background: color-mix(in srgb, var(--surface) 92%, transparent);
+  border-color: var(--line);
+}
+
+.hero-search::before {
+  background: linear-gradient(90deg, var(--gold), var(--brand-2));
+}
+
+.phone-shell {
+  border-color: color-mix(in srgb, var(--surface-strong) 82%, var(--ink));
+  background: linear-gradient(155deg, var(--ink), color-mix(in srgb, var(--surface-soft) 70%, var(--clay)));
+}
+
+.phone-top {
+  background: var(--surface-strong);
+}
+
+.mini-map {
+  background:
+    var(--contour) center / 360px 260px,
+    linear-gradient(90deg, transparent 47%, color-mix(in srgb, var(--gold) 42%, transparent) 48% 52%, transparent 53%),
+    linear-gradient(0deg, transparent 45%, color-mix(in srgb, var(--brand-2) 34%, transparent) 46% 50%, transparent 51%),
+    var(--ink);
+}
+
+.mini-map span {
+  background: var(--brand);
+  border-color: var(--text);
+  box-shadow: 0 0 0 7px color-mix(in srgb, var(--brand) 14%, transparent);
+}
+
+.floating-card {
+  background: color-mix(in srgb, var(--surface) 94%, transparent);
+  color: var(--text);
+}
+
+.prime-badge {
+  background: linear-gradient(135deg, var(--gold), var(--brand));
+  color: var(--ink);
+}
+
+.standard-badge, .verified-badge, .status-pill {
+  background: color-mix(in srgb, var(--brand-2) 16%, var(--surface));
+  color: var(--brand-2);
+}
+
+.onboarding-strip article::after {
+  right: 12px;
+  bottom: 10px;
+  width: 42px;
+  height: 2px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, var(--brand), var(--gold), var(--brand-2));
+}
+
+.category-tile, .business-card, .chat-panel, .quote-panel, .conversation-list, .admin-card, .profile-card, blockquote,
+.profile-hero, .legal-doc, .success-card, .modal-card {
+  background:
+    linear-gradient(145deg, color-mix(in srgb, var(--surface) 94%, var(--brand-2)), var(--surface));
+  border-color: var(--line);
+  box-shadow: var(--shadow);
+}
+
+.category-tile::before {
+  background:
+    var(--contour) center / 240px 170px,
+    linear-gradient(135deg, color-mix(in srgb, var(--brand) 14%, transparent), transparent 58%);
+  opacity: 0.24;
+}
+
+.category-tile::after {
+  inset: auto 10px 8px 10px;
+  width: auto;
+  height: 2px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, var(--brand), var(--gold), var(--brand-2));
+  opacity: 0.76;
+}
+
+.category-tile:hover::after {
+  transform: none;
+}
+
+.category-tile span {
+  background: color-mix(in srgb, var(--gold) 82%, var(--brand));
+  color: var(--ink);
+}
+
+.category-tile strong,
+.business-card h3,
+.business-card p,
+.business-card .meta-line,
+.business-card,
+.card-body {
+  color: var(--text);
+}
+
+.business-card::before {
+  width: 3px;
+  background: linear-gradient(180deg, var(--brand), var(--gold), var(--brand-2));
+}
+
+.business-card.prime::before {
+  inset: 0 auto 0 0;
+  border-top: 0;
+}
+
+.card-media {
+  background:
+    var(--contour) center / 280px 200px,
+    linear-gradient(135deg, var(--surface-strong), color-mix(in srgb, var(--brand) 22%, var(--surface)), color-mix(in srgb, var(--brand-2) 18%, var(--surface)));
+}
+
+.service-tags span, .quote-item, .admin-row {
+  background: var(--surface-strong);
+  color: var(--text);
+}
+
+.prime-section {
+  background:
+    linear-gradient(118deg, color-mix(in srgb, var(--surface-soft) 90%, var(--brand-2)), color-mix(in srgb, var(--brand) 38%, var(--bg)) 58%, color-mix(in srgb, var(--clay) 42%, var(--bg))),
+    var(--bg);
+  color: var(--text);
+}
+
+.prime-section::before {
+  background-image: var(--contour);
+  background-size: 520px 370px;
+  background-position: right -90px center;
+  opacity: 0.18;
+}
+
+.prime-actions {
+  background: color-mix(in srgb, var(--surface) 72%, transparent);
+  border-color: color-mix(in srgb, var(--gold) 26%, transparent);
+}
+
+.profile-logo {
+  background: linear-gradient(135deg, var(--gold), var(--brand), var(--clay));
+  color: var(--ink);
+}
+
+blockquote::before {
+  background: linear-gradient(90deg, var(--brand), var(--gold), var(--brand-2));
+}
+
+.legal-footer {
+  background:
+    linear-gradient(135deg, color-mix(in srgb, var(--brand) 16%, transparent), transparent 38%),
+    var(--bg);
+}
+
+.footer-brand strong, .footer-brand span {
+  color: var(--text);
+}
+
+.legal-links a, .legal-resource-links a {
+  border-color: color-mix(in srgb, var(--brand) 32%, transparent);
+  background: color-mix(in srgb, var(--brand) 10%, var(--surface));
+  color: var(--text);
+}
+
+.legal-links a:hover {
+  background: color-mix(in srgb, var(--brand) 18%, var(--surface));
+}
+
+.tab.active, .business-tab.active {
+  background: linear-gradient(135deg, var(--gold), var(--brand));
+  color: var(--ink);
+}
+
+.message.mine {
+  background: linear-gradient(135deg, var(--brand), var(--clay));
+  color: var(--ink);
+}
+
+.toast {
+  background: var(--surface-strong);
+  color: var(--text);
+}
+
+@media (max-width: 1100px) {
+  .hero-section {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 720px) {
+  .hero-section::after {
+    display: none;
+  }
+
+  .hero-panel {
+    display: none;
   }
 }

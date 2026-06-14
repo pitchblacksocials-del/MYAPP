@@ -4,8 +4,8 @@
   "description": "Connecting Professionals across South Africa.",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#686a6c",
-  "theme_color": "#00a3ff",
+  "background_color": "#151d18",
+  "theme_color": "#d98c47",
   "icons": [
     {
       "src": "/icons/icon.svg",
