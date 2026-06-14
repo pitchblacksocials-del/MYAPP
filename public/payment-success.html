@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Subscription Payment Received | Connect-ZA</title>
   <link rel="icon" href="/icons/icon.svg" type="image/svg+xml">
-  <link rel="stylesheet" href="/styles.css?v=hero-city-filter-1">
+  <link rel="stylesheet" href="/styles.css?v=paystack-1">
 </head>
 <body class="payment-page">
   <main class="success-card">
@@ -27,16 +27,20 @@
       button.disabled = true;
       button.textContent = "Confirming";
       try {
-        const response = await fetch("/api/payments/webhook", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            businessId: params.get("businessId"),
-            gateway: params.get("gateway"),
-            checkoutId: params.get("checkoutId"),
-            plan: params.get("plan")
-          })
-        });
+        const gateway = params.get("gateway");
+        const reference = params.get("reference") || params.get("trxref");
+        const response = gateway === "Paystack"
+          ? await fetch(`/api/payments/paystack/verify?reference=${encodeURIComponent(reference || "")}&businessId=${encodeURIComponent(params.get("businessId") || "")}`)
+          : await fetch("/api/payments/webhook", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                businessId: params.get("businessId"),
+                gateway,
+                checkoutId: params.get("checkoutId"),
+                plan: params.get("plan")
+              })
+            });
         const data = await response.json().catch(() => ({}));
         if (!response.ok) throw new Error(data.error || "Payment confirmation failed.");
         status.textContent = "Your subscription request is paid and pending admin approval.";

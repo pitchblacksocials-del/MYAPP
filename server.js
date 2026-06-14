@@ -30,6 +30,8 @@ const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || "";
 const SUPABASE_DATABASE_URL = process.env.SUPABASE_DATABASE_URL || process.env.DATABASE_URL || "";
 const SUPABASE_STATE_TABLE = process.env.SUPABASE_STATE_TABLE || "connect_za_state";
 const SUPABASE_STATE_ID = process.env.SUPABASE_STATE_ID || "production";
+const PAYSTACK_SECRET_KEY = process.env.PAYSTACK_SECRET_KEY || "";
+const PAYSTACK_CURRENCY = process.env.PAYSTACK_CURRENCY || "ZAR";
 function configured(value, placeholders) {
   return Boolean(value && !placeholders.some((placeholder) => value.includes(placeholder)));
 }
@@ -231,6 +233,144 @@ function subscriptionPlanLabel(planKey) {
 
 function subscriptionPlanAmount(planKey) {
   return SUBSCRIPTION_PLANS[subscriptionPlanKey(planKey)].amount;
+}
+
+function amountToPaystackSubunit(amount) {
+  return Math.round(Number(amount || 0) * 100);
+}
+
+function paystackConfigured() {
+  return configured(PAYSTACK_SECRET_KEY, ["your-paystack-secret-key", "sk_test_xxx", "sk_live_xxx"]);
+}
+
+function publicBaseUrl(req) {
+  const proto = String(req.headers["x-forwarded-proto"] || "").split(",")[0] || (req.socket.encrypted ? "https" : "http");
+  const host = String(req.headers["x-forwarded-host"] || req.headers.host || `localhost:${PORT}`).split(",")[0];
+  return `${proto}://${host}`.replace(/\/$/, "");
+}
+
+function parseJsonBody(body) {
+  if (!body) return {};
+  try {
+    return JSON.parse(body);
+  } catch (error) {
+    const invalidJson = new Error("Invalid request data.");
+    invalidJson.statusCode = 400;
+    throw invalidJson;
+  }
+}
+
+async function paystackRequest(method, endpoint, body) {
+  if (!paystackConfigured()) {
+    const error = new Error("Paystack is not configured yet. Add PAYSTACK_SECRET_KEY in Render environment variables.");
+    error.statusCode = 503;
+    throw error;
+  }
+  const response = await fetch(`https://api.paystack.co${endpoint}`, {
+    method,
+    headers: {
+      Authorization: `Bearer ${PAYSTACK_SECRET_KEY}`,
+      "Content-Type": "application/json"
+    },
+    body: body ? JSON.stringify(body) : undefined
+  });
+  const text = await response.text();
+  const payload = text ? JSON.parse(text) : {};
+  if (!response.ok || payload.status === false) {
+    const error = new Error(payload.message || `Paystack ${method} ${endpoint} failed.`);
+    error.statusCode = response.status >= 400 ? response.status : 502;
+    throw error;
+  }
+  return payload.data || payload;
+}
+
+function paystackReference() {
+  return `CZ${Date.now()}${crypto.randomBytes(5).toString("hex").toUpperCase()}`;
+}
+
+async function initializePaystackCheckout(req, user, business, plan, autoRenew) {
+  const amount = subscriptionPlanAmount(plan);
+  const reference = paystackReference();
+  const callbackUrl = `${publicBaseUrl(req)}/payment-success.html?gateway=Paystack&businessId=${encodeURIComponent(business.id)}&checkoutId=${encodeURIComponent(reference)}&plan=${encodeURIComponent(plan)}&reference=${encodeURIComponent(reference)}`;
+  const data = await paystackRequest("POST", "/transaction/initialize", {
+    email: business.email || user.email,
+    amount: amountToPaystackSubunit(amount),
+    currency: PAYSTACK_CURRENCY,
+    reference,
+    callback_url: callbackUrl,
+    metadata: {
+      businessId: business.id,
+      businessName: business.name,
+      plan,
+      planLabel: subscriptionPlanLabel(plan),
+      autoRenew: Boolean(autoRenew),
+      source: "connect-za"
+    }
+  });
+  if (!data.authorization_url) {
+    const error = new Error("Paystack did not return a checkout URL.");
+    error.statusCode = 502;
+    throw error;
+  }
+  return {
+    reference,
+    accessCode: data.access_code,
+    authorizationUrl: data.authorization_url
+  };
+}
+
+function verifyPaystackSignature(rawBody, signature) {
+  if (!paystackConfigured() || !signature) return false;
+  const expected = crypto.createHmac("sha512", PAYSTACK_SECRET_KEY).update(rawBody).digest("hex");
+  const received = String(signature);
+  if (expected.length !== received.length) return false;
+  return crypto.timingSafeEqual(Buffer.from(expected), Buffer.from(received));
+}
+
+function findBusinessForPaystackTransaction(db, transaction, fallbackBusinessId) {
+  const reference = transaction?.reference || transaction?.metadata?.reference;
+  return db.businesses.find((business) => {
+    if (fallbackBusinessId && business.id === fallbackBusinessId) return true;
+    return business.subscription?.reference === reference || business.subscription?.checkoutId === reference;
+  });
+}
+
+function applyVerifiedPaystackPayment(db, business, transaction) {
+  const reference = transaction?.reference || "";
+  if (!business?.subscription) {
+    const error = new Error("Payment checkout could not be matched to a business subscription.");
+    error.statusCode = 404;
+    throw error;
+  }
+  if (business.subscription.reference !== reference && business.subscription.checkoutId !== reference) {
+    const error = new Error("Payment reference does not match this business checkout.");
+    error.statusCode = 400;
+    throw error;
+  }
+  if (transaction.status !== "success") {
+    const error = new Error(`Paystack payment is ${transaction.status || "not successful"}.`);
+    error.statusCode = 400;
+    throw error;
+  }
+  const plan = subscriptionPlanKey(business.subscription.plan || transaction.metadata?.plan || business.subscriptionPlan, "standard");
+  const expectedAmount = amountToPaystackSubunit(subscriptionPlanAmount(plan));
+  if (Number(transaction.amount || 0) < expectedAmount) {
+    const error = new Error("Paystack payment amount is lower than the selected subscription plan.");
+    error.statusCode = 400;
+    throw error;
+  }
+  setBusinessSubscriptionStatus(business, plan, "pending");
+  business.subscription.gateway = "Paystack";
+  business.subscription.reference = reference;
+  business.subscription.checkoutId = reference;
+  business.subscription.paymentStatus = "paid_pending_admin";
+  business.subscription.paidAt = transaction.paid_at || transaction.paidAt || new Date().toISOString();
+  business.subscription.paystackTransactionId = transaction.id || transaction.transactionId || "";
+  business.subscription.paystackChannel = transaction.channel || "";
+  business.subscription.currency = transaction.currency || PAYSTACK_CURRENCY;
+  business.subscription.nextBillingDate = null;
+  refreshSubscriptionAnalytics(db);
+  return plan;
 }
 
 function activeListing(business) {
@@ -539,7 +679,7 @@ function sendJson(res, body, status = 200, headers = {}) {
   send(res, status, body, headers);
 }
 
-function readBody(req) {
+function readRawBody(req) {
   return new Promise((resolve, reject) => {
     let body = "";
     let tooLarge = false;
@@ -556,16 +696,13 @@ function readBody(req) {
     });
     req.on("end", () => {
       if (tooLarge) return;
-      if (!body) return resolve({});
-      try {
-        resolve(JSON.parse(body));
-      } catch (error) {
-        const invalidJson = new Error("Invalid request data.");
-        invalidJson.statusCode = 400;
-        reject(invalidJson);
-      }
+      resolve(body);
     });
   });
+}
+
+async function readBody(req) {
+  return parseJsonBody(await readRawBody(req));
 }
 
 function requireAuth(req, res, db, type) {
@@ -930,25 +1067,73 @@ async function api(req, res, pathname, query) {
     if (business.subscriptionPlan === plan && business.subscriptionStatus === "active") {
       return sendJson(res, { error: `${subscriptionPlanLabel(plan)} is already active for this business.` }, 400);
     }
-    const gateway = ["PayFast", "Ozow", "Yoco", "Stripe"].includes(body.gateway) ? body.gateway : "Stripe";
+    const gateway = ["Paystack", "PayFast", "Ozow", "Yoco", "Stripe"].includes(body.gateway) ? body.gateway : "Paystack";
+    let paystackCheckout = null;
+    if (gateway === "Paystack") {
+      paystackCheckout = await initializePaystackCheckout(req, user, business, plan, body.autoRenew);
+    }
     setBusinessSubscriptionStatus(business, plan, "pending");
+    const checkoutId = paystackCheckout?.reference || uid("pay");
     business.subscription = {
       plan,
       planLabel: subscriptionPlanLabel(plan),
       gateway,
       amount: subscriptionPlanAmount(plan),
+      currency: gateway === "Paystack" ? PAYSTACK_CURRENCY : "ZAR",
       autoRenew: Boolean(body.autoRenew),
       paymentStatus: "checkout_created",
       requestedAt: new Date().toISOString(),
       nextBillingDate: null,
-      checkoutId: uid("pay")
+      checkoutId,
+      reference: checkoutId
     };
+    if (paystackCheckout) {
+      business.subscription.accessCode = paystackCheckout.accessCode;
+      business.subscription.authorizationUrl = paystackCheckout.authorizationUrl;
+    }
     await writeDb(db);
-    const redirectUrl = `/payment-success.html?businessId=${encodeURIComponent(business.id)}&gateway=${encodeURIComponent(gateway)}&checkoutId=${encodeURIComponent(business.subscription.checkoutId)}&plan=${encodeURIComponent(plan)}`;
+    const redirectUrl = paystackCheckout?.authorizationUrl || `/payment-success.html?businessId=${encodeURIComponent(business.id)}&gateway=${encodeURIComponent(gateway)}&checkoutId=${encodeURIComponent(business.subscription.checkoutId)}&plan=${encodeURIComponent(plan)}`;
     return sendJson(res, { checkoutId: business.subscription.checkoutId, gateway, plan, planLabel: subscriptionPlanLabel(plan), amount: business.subscription.amount, redirectUrl });
   }
 
+  if (req.method === "GET" && pathname === "/api/payments/paystack/verify") {
+    const reference = String(query.reference || query.trxref || "").trim();
+    if (!reference) return sendJson(res, { error: "Paystack reference is required." }, 400);
+    const transaction = await paystackRequest("GET", `/transaction/verify/${encodeURIComponent(reference)}`);
+    const business = findBusinessForPaystackTransaction(db, transaction, String(query.businessId || ""));
+    if (!business) return sendJson(res, { error: "Business not found for this Paystack payment." }, 404);
+    const plan = applyVerifiedPaystackPayment(db, business, transaction);
+    await writeDb(db);
+    broadcast("subscription", publicBusiness(business));
+    return sendJson(res, {
+      ok: true,
+      gateway: "Paystack",
+      businessId: business.id,
+      plan,
+      status: business.subscriptionStatus,
+      paymentStatus: business.subscription.paymentStatus
+    });
+  }
+
   if (req.method === "POST" && pathname === "/api/payments/webhook") {
+    const signature = req.headers["x-paystack-signature"];
+    if (signature) {
+      const rawBody = await readRawBody(req);
+      if (!verifyPaystackSignature(rawBody, signature)) {
+        return sendJson(res, { error: "Invalid Paystack signature." }, 401);
+      }
+      const event = parseJsonBody(rawBody);
+      if (event.event === "charge.success") {
+        const transaction = event.data || {};
+        const business = findBusinessForPaystackTransaction(db, transaction, transaction.metadata?.businessId);
+        if (business) {
+          applyVerifiedPaystackPayment(db, business, transaction);
+          await writeDb(db);
+          broadcast("subscription", publicBusiness(business));
+        }
+      }
+      return sendJson(res, { received: true });
+    }
     const body = await readBody(req);
     const business = db.businesses.find((biz) => biz.id === body.businessId);
     if (!business) return sendJson(res, { error: "Business not found." }, 404);
