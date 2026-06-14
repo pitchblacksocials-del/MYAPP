@@ -7,7 +7,7 @@
   <meta name="description" content="Connect-ZA connects customers with trusted South African businesses and service providers.">
   <title>Connect-ZA | Connecting Professionals</title>
   <link rel="manifest" href="/manifest.webmanifest">
-  <link rel="stylesheet" href="/styles.css?v=organic-premium-3">
+  <link rel="stylesheet" href="/styles.css?v=split-hero-2">
 </head>
 <body>
   <header class="app-header">
@@ -33,6 +33,10 @@
         <p class="eyebrow">South Africa's professional marketplace</p>
         <h1>Find trusted companies, compare quotes, and chat instantly.</h1>
         <p class="hero-text">Find verified South African service providers, compare quotes, and connect fast.</p>
+        <div class="hero-actions">
+          <a class="primary-btn hero-cta" href="#discover">Explore businesses</a>
+          <a class="secondary-btn hero-cta" href="#prime">View plans</a>
+        </div>
         <form id="heroSearch" class="hero-search">
           <input id="searchInput" type="search" placeholder="Search service, company, city..." autocomplete="off">
           <select id="provinceFilter" aria-label="Province"></select>
@@ -45,21 +49,15 @@
           <span><strong>9</strong> provinces</span>
         </div>
       </div>
-      <div class="hero-panel">
-        <div class="phone-shell">
-          <div class="phone-top"></div>
-          <div class="mini-map">
-            <span></span><span></span><span></span><span></span>
+      <div class="hero-panel" aria-label="Marketplace image placeholder">
+        <div class="hero-image-placeholder">
+          <div class="image-placeholder-grid"></div>
+          <div class="image-placeholder-copy">
+            <span>Image placeholder</span>
+            <strong>South African business marketplace</strong>
+            <small>Use a real project, team, or service photo here.</small>
           </div>
-          <div class="floating-card prime-preview">
-            <span class="prime-badge">PRIME</span>
-            <strong>Featured provider</strong>
-            <small>Verified South African business</small>
-          </div>
-          <div class="floating-card chat-preview">
-            <strong>Quote updates</strong>
-            <small>Messages from trusted providers</small>
-          </div>
+          <div class="placeholder-chip prime-badge">PRIME ready</div>
         </div>
       </div>
     </section>
@@ -295,6 +293,6 @@
   </dialog>
 
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
-  <script src="/app.js?v=organic-premium-3"></script>
+  <script src="/app.js?v=split-hero-2"></script>
 </body>
 </html>

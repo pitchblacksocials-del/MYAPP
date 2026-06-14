@@ -1,5 +1,5 @@
-const CACHE = "connect-za-v20-organic-premium";
-const ASSETS = ["/", "/styles.css?v=organic-premium-3", "/app.js?v=organic-premium-3", "/legal.html", "/manifest.webmanifest", "/icons/icon.svg"];
+const CACHE = "connect-za-v22-split-hero";
+const ASSETS = ["/", "/styles.css?v=split-hero-2", "/app.js?v=split-hero-2", "/legal.html", "/manifest.webmanifest", "/icons/icon.svg"];
 
 self.addEventListener("install", (event) => {
   event.waitUntil(caches.open(CACHE).then((cache) => cache.addAll(ASSETS)));
