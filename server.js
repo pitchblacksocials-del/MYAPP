@@ -1045,14 +1045,27 @@ async function api(req, res, pathname, query) {
     const user = requireAuth(req, res, db, "customer");
     if (!user) return;
     const body = await readBody(req);
+    const business = db.businesses.find((item) => item.id === body.businessId);
+    if (!business) return sendJson(res, { error: "Business not found." }, 404);
     const quote = db.quotes.find((item) => item.businessId === body.businessId && item.customerId === user.id);
     if (!quote) return sendJson(res, { error: "Only verified customers can review a business after a quote request." }, 403);
-    const review = { id: uid("rev"), businessId: body.businessId, userId: user.id, rating: Number(body.rating || 5), text: String(body.text || ""), verified: true, response: "", createdAt: new Date().toISOString() };
-    db.reviews.push(review);
+    const submittedRating = Number(body.rating);
+    const rating = Number.isFinite(submittedRating) ? Math.max(1, Math.min(5, submittedRating)) : 5;
+    const text = String(body.text || "").trim();
+    if (!text) return sendJson(res, { error: "Please write a short review before submitting." }, 400);
+    let review = db.reviews.find((item) => item.businessId === body.businessId && item.userId === user.id);
+    if (review) {
+      review.rating = rating;
+      review.text = text;
+      review.verified = true;
+      review.updatedAt = new Date().toISOString();
+    } else {
+      review = { id: uid("rev"), businessId: body.businessId, userId: user.id, rating, text, verified: true, response: "", createdAt: new Date().toISOString() };
+      db.reviews.push(review);
+    }
     const reviews = db.reviews.filter((item) => item.businessId === body.businessId);
-    const biz = db.businesses.find((item) => item.id === body.businessId);
-    biz.rating = Number((reviews.reduce((sum, item) => sum + item.rating, 0) / reviews.length).toFixed(1));
-    biz.reviewCount = reviews.length;
+    business.rating = Number((reviews.reduce((sum, item) => sum + item.rating, 0) / reviews.length).toFixed(1));
+    business.reviewCount = reviews.length;
     await writeDb(db);
     return sendJson(res, { review });
   }

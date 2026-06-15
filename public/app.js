@@ -52,6 +52,16 @@ function money(value) {
   return `R${Number(value || 0).toLocaleString("en-ZA")}`;
 }
 
+function escapeHtml(value) {
+  return String(value || "").replace(/[&<>"']/g, (char) => ({
+    "&": "&amp;",
+    "<": "&lt;",
+    ">": "&gt;",
+    "\"": "&quot;",
+    "'": "&#39;"
+  })[char]);
+}
+
 const subscriptionPlans = {
   standard: { label: "Standard", amount: 150 },
   prime: { label: "PRIME", amount: 250 }
@@ -441,6 +451,18 @@ function renderBusinesses() {
 async function renderProfile(id) {
   const { business, reviews } = await api(`/api/businesses/${id}`);
   state.currentBusiness = business;
+  const reviewHelp = !state.user
+    ? "Sign in as a customer to leave a verified review."
+    : state.user.type === "customer"
+      ? "Reviews are verified through quote requests with this business."
+      : "Only customer accounts can leave business reviews.";
+  const reviewItems = reviews.map((review) => `
+    <div class="quote-item">
+      <strong>${"★".repeat(review.rating)}</strong>
+      <p>${escapeHtml(review.text)}</p>
+      ${review.response ? `<small>Business response: ${escapeHtml(review.response)}</small>` : ""}
+    </div>
+  `).join("") || "<p>No reviews yet.</p>";
   $("#profileSection").innerHTML = `
     <div class="profile-toolbar">
       <a class="secondary-btn" href="/discover" data-route="discover">Back to Discover</a>
@@ -459,8 +481,30 @@ async function renderProfile(id) {
           <p>${business.description}</p>
           <div class="service-tags">${business.services.map((service) => `<span>${service}</span>`).join("")}</div>
           <div class="gallery-grid">${business.gallery.map((item) => `<img alt="${business.name} portfolio" src="${item}">`).join("")}</div>
-          <h3>Reviews</h3>
-          <div class="quote-list">${reviews.map((review) => `<div class="quote-item"><strong>${"★".repeat(review.rating)}</strong><p>${review.text}</p>${review.response ? `<small>Business response: ${review.response}</small>` : ""}</div>`).join("") || "<p>No reviews yet.</p>"}</div>
+          <section class="profile-reviews">
+            <div class="review-heading">
+              <div>
+                <h3>Customer reviews</h3>
+                <p>${business.reviewCount || 0} verified review(s)</p>
+              </div>
+              <span class="status-pill">${business.rating || "New"} rating</span>
+            </div>
+            <div class="quote-list">${reviewItems}</div>
+            <form id="reviewForm" class="review-form" data-business-id="${business.id}">
+              <h3>Leave a review</h3>
+              <p>${reviewHelp}</p>
+              <select id="reviewRating" aria-label="Review rating">
+                <option value="5">5 stars</option>
+                <option value="4">4 stars</option>
+                <option value="3">3 stars</option>
+                <option value="2">2 stars</option>
+                <option value="1">1 star</option>
+              </select>
+              <textarea id="reviewText" placeholder="Share your experience with this business" required></textarea>
+              <button class="primary-btn" type="submit">Submit review</button>
+              <p id="reviewMessage" class="form-message"></p>
+            </form>
+          </section>
         </div>
         <aside class="profile-card">
           <div class="admin-card">
@@ -928,6 +972,32 @@ $("#bizProfileSelect").addEventListener("input", () => {
 $("#refreshAdmin").addEventListener("click", () => renderAdmin().catch((error) => toast(error.message)));
 
 document.addEventListener("submit", async (event) => {
+  if (event.target.id === "reviewForm") {
+    event.preventDefault();
+    const businessId = event.target.dataset.businessId;
+    try {
+      if (!state.user) {
+        $("#authDialog").showModal();
+        return;
+      }
+      if (state.user.type !== "customer") throw new Error("Only customer accounts can leave business reviews.");
+      await api("/api/reviews", {
+        method: "POST",
+        body: JSON.stringify({
+          businessId,
+          rating: $("#reviewRating").value,
+          text: $("#reviewText").value
+        })
+      });
+      $("#reviewText").value = "";
+      await Promise.all([renderProfile(businessId), loadBusinesses()]);
+      toast("Review submitted");
+    } catch (error) {
+      $("#reviewMessage").textContent = error.message;
+    }
+    return;
+  }
+
   if (event.target.id === "adForm") {
     event.preventDefault();
     await api("/api/admin/ads", {

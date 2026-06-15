@@ -735,6 +735,44 @@ textarea {
   margin-bottom: 12px;
 }
 
+.profile-reviews {
+  display: grid;
+  gap: 10px;
+  margin-top: 16px;
+}
+
+.review-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.review-heading p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+
+.review-form {
+  display: grid;
+  gap: 8px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--surface-strong) 64%, transparent);
+}
+
+.review-form h3,
+.review-form p {
+  margin: 0;
+}
+
+.review-form p {
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+
 .profile-cover {
   height: 210px;
   background-size: cover;
