@@ -7,6 +7,7 @@ const state = {
   currentBusiness: null,
   conversations: [],
   activeConversation: null,
+  activePage: "home",
   meta: { categories: [], provinces: [], cities: [] }
 };
 
@@ -81,6 +82,21 @@ function syncCityFilter(sourceId) {
   if (sourceId === "cityFilter") heroCity.value = discoverCity.value;
 }
 
+function syncSearchFilter(sourceId) {
+  const pairs = [
+    ["searchInput", "discoverSearchInput"],
+    ["provinceFilter", "discoverProvinceFilter"],
+    ["categoryFilter", "discoverCategoryFilter"]
+  ];
+  for (const [primaryId, secondaryId] of pairs) {
+    const primary = $(`#${primaryId}`);
+    const secondary = $(`#${secondaryId}`);
+    if (!primary || !secondary) continue;
+    if (sourceId === primaryId) secondary.value = primary.value;
+    if (sourceId === secondaryId) primary.value = secondary.value;
+  }
+}
+
 function whatsappUrl(phone, businessName) {
   const clean = String(phone || "").replace(/[^\d]/g, "");
   const normalized = clean.startsWith("27") ? clean : clean.replace(/^0/, "27");
@@ -95,6 +111,8 @@ async function boot() {
     fillSelect($("#heroCityFilter"), state.meta.cities, "All cities/towns");
     fillSelect($("#cityFilter"), state.meta.cities, "All South African cities/towns");
     fillSelect($("#categoryFilter"), state.meta.categories, "All categories");
+    fillSelect($("#discoverProvinceFilter"), state.meta.provinces, "All provinces");
+    fillSelect($("#discoverCategoryFilter"), state.meta.categories, "All categories");
     fillSelect($("#bizProvince"), state.meta.provinces, "Province");
     fillSelect($("#bizCity"), state.meta.cities, "City or town");
     fillSelect($("#bizCategory"), state.meta.categories, "Business category");
@@ -105,6 +123,7 @@ async function boot() {
     await loadConversations();
     await loadQuotes();
     connectEvents();
+    await applyRoute();
   } catch (error) {
     toast(error.message);
   }
@@ -126,13 +145,79 @@ function renderUser() {
   $("#openBusiness").textContent = "List Business";
   if (state.user?.type === "business") $("#openBusiness").textContent = "Business Profile";
   if (state.user?.type === "admin") $("#openBusiness").textContent = "Admin mode";
-  $("#admin").classList.toggle("hidden", state.user?.type !== "admin");
   renderPrimePanel();
 }
 
-function showPanel(id) {
-  const node = $(id);
-  if (node) node.classList.remove("hidden");
+const routeSections = {
+  home: "#home",
+  discover: "#discover",
+  plans: "#prime",
+  profile: "#profileSection",
+  chat: "#chat",
+  admin: "#admin"
+};
+
+const legacyHashRoutes = {
+  "#home": "/",
+  "#discover": "/discover",
+  "#prime": "/plans",
+  "#chat": "/chat",
+  "#admin": "/admin",
+  "#profileSection": "/profile"
+};
+
+function normalizeRoutePath(pathname = location.pathname) {
+  const clean = pathname.replace(/\/+$/, "") || "/";
+  if (clean === "/index.html") return "/";
+  return clean;
+}
+
+function routeFromLocation() {
+  if (legacyHashRoutes[location.hash]) {
+    history.replaceState({}, "", legacyHashRoutes[location.hash]);
+  }
+  const path = normalizeRoutePath();
+  if (path === "/") return { page: "home" };
+  if (path === "/discover") return { page: "discover" };
+  if (path === "/plans") return { page: "plans" };
+  if (path === "/chat") return { page: "chat" };
+  if (path === "/admin") return { page: "admin" };
+  if (path.startsWith("/profile/")) return { page: "profile", businessId: decodeURIComponent(path.split("/").filter(Boolean)[1] || "") };
+  if (path === "/profile") return { page: "profile" };
+  return { page: "home" };
+}
+
+function updateNav(page) {
+  $$("[data-route]").forEach((link) => link.classList.toggle("active", link.dataset.route === page));
+}
+
+function showOnlyPage(page) {
+  Object.entries(routeSections).forEach(([key, selector]) => {
+    const node = $(selector);
+    if (node) node.classList.toggle("hidden", key !== page);
+  });
+  state.activePage = page;
+  document.body.dataset.page = page;
+  updateNav(page);
+}
+
+async function applyRoute({ scroll = false } = {}) {
+  const route = routeFromLocation();
+  showOnlyPage(route.page);
+  if (route.page === "admin") await renderAdmin();
+  if (route.page === "profile" && route.businessId) await renderProfile(route.businessId);
+  if (route.page === "profile" && !route.businessId && !$("#profileSection").innerHTML.trim()) {
+    $("#profileSection").innerHTML = `<div class="admin-card"><h2>Business profile</h2><p>Select a business from Discover to view its profile.</p><a class="primary-btn" href="/discover" data-route="discover">Browse businesses</a></div>`;
+  }
+  if (scroll) window.scrollTo({ top: 0, behavior: "smooth" });
+}
+
+async function navigateTo(path, options = {}) {
+  const next = normalizeRoutePath(path);
+  if (normalizeRoutePath() !== next || location.search || location.hash) {
+    history.pushState({}, "", next);
+  }
+  await applyRoute({ scroll: options.scroll !== false });
 }
 
 async function loadBusinesses() {
@@ -344,20 +429,22 @@ function renderBusinesses() {
         <div class="meta-line"><span>${biz.category}</span><span>${biz.city}, ${biz.province}</span><span>${biz.priceRange}</span></div>
         <div class="service-tags">${(biz.services || []).slice(0, 4).map((service) => `<span>${service}</span>`).join("")}</div>
         <div class="card-actions">
-          <button class="secondary-btn view-profile" data-id="${biz.id}">Profile</button>
+          <a class="secondary-btn view-profile" href="/profile/${encodeURIComponent(biz.id)}" data-id="${biz.id}">Profile</a>
           <a class="secondary-btn" target="_blank" rel="noopener" href="${whatsappUrl(biz.phone, biz.name)}">WhatsApp</a>
-          <button class="primary-btn chat-business" data-id="${biz.id}">Chat</button>
+          <a class="primary-btn chat-business" href="/chat" data-id="${biz.id}">Chat</a>
         </div>
       </div>
     </article>
   `).join("") || `<p>No businesses match your filters yet.</p>`;
 }
 
-async function showProfile(id) {
+async function renderProfile(id) {
   const { business, reviews } = await api(`/api/businesses/${id}`);
   state.currentBusiness = business;
-  $("#profileSection").classList.remove("hidden");
   $("#profileSection").innerHTML = `
+    <div class="profile-toolbar">
+      <a class="secondary-btn" href="/discover" data-route="discover">Back to Discover</a>
+    </div>
     <article class="profile-hero">
       <div class="profile-cover" style="background-image:url('${business.cover || business.gallery?.[0] || ""}')"></div>
       <div class="profile-content">
@@ -383,8 +470,8 @@ async function showProfile(id) {
             <p>${business.email}</p>
             <div class="card-actions">
               <a class="primary-btn" target="_blank" rel="noopener" href="${whatsappUrl(business.phone, business.name)}">WhatsApp</a>
-              <button class="secondary-btn chat-business" data-id="${business.id}">Chat</button>
-              <button class="secondary-btn request-quote" data-id="${business.id}">Quote</button>
+              <a class="secondary-btn chat-business" href="/chat" data-id="${business.id}">Chat</a>
+              <a class="secondary-btn request-quote" href="/chat" data-id="${business.id}">Quote</a>
               <a class="secondary-btn" href="tel:${business.phone}">Call Now</a>
               <a class="secondary-btn" target="_blank" rel="noopener" href="https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${business.address} ${business.city} South Africa`)}">Map</a>
               <a class="secondary-btn" target="_blank" rel="noopener" href="${business.website}">Website</a>
@@ -394,7 +481,11 @@ async function showProfile(id) {
       </div>
     </article>
   `;
-  location.hash = "profileSection";
+}
+
+async function showProfile(id) {
+  await renderProfile(id);
+  await navigateTo(`/profile/${encodeURIComponent(id)}`);
 }
 
 async function loadConversations() {
@@ -550,6 +641,11 @@ document.addEventListener("click", async (event) => {
   const target = event.target.closest("button, a");
   if (!target) return;
   try {
+    if (target.matches("a[data-route]")) {
+      event.preventDefault();
+      await navigateTo(target.getAttribute("href") || "/");
+      return;
+    }
     if (target.id === "themeToggle") {
       document.documentElement.dataset.theme = document.documentElement.dataset.theme === "dark" ? "" : "dark";
     }
@@ -557,9 +653,8 @@ document.addEventListener("click", async (event) => {
     if (target.id === "openBusiness") {
       if (!state.user) return $("#authDialog").showModal();
       if (state.user.type === "admin") {
-        $("#admin").classList.remove("hidden");
         await renderAdmin();
-        location.hash = "admin";
+        await navigateTo("/admin");
         return;
       }
       if (state.user.type !== "business") return toast("Use a business account to create a company profile.");
@@ -567,23 +662,28 @@ document.addEventListener("click", async (event) => {
     }
     if (target.matches("[data-category]")) {
       $("#categoryFilter").value = target.dataset.category;
+      syncSearchFilter("categoryFilter");
       await loadBusinesses();
+      await navigateTo("/discover");
     }
-    if (target.classList.contains("view-profile")) await showProfile(target.dataset.id);
+    if (target.classList.contains("view-profile")) {
+      event.preventDefault();
+      await showProfile(target.dataset.id);
+    }
     if (target.classList.contains("request-quote")) {
+      event.preventDefault();
       state.currentBusiness = state.businesses.find((biz) => biz.id === target.dataset.id) || state.currentBusiness;
-      showPanel("#chat");
-      location.hash = "chat";
+      await navigateTo("/chat");
       $("#quoteTitle").focus();
     }
     if (target.classList.contains("chat-business")) {
+      event.preventDefault();
       if (!state.user) return $("#authDialog").showModal();
       state.currentBusiness = state.businesses.find((biz) => biz.id === target.dataset.id);
       state.activeConversation = state.conversations.find((con) => con.businessId === state.currentBusiness.id) || null;
       renderConversations();
       renderChat();
-      showPanel("#chat");
-      location.hash = "chat";
+      await navigateTo("/chat");
       $("#chatInput").focus();
     }
     if (target.classList.contains("favorite-btn")) {
@@ -626,13 +726,26 @@ document.addEventListener("click", async (event) => {
 
 $("#heroSearch").addEventListener("submit", async (event) => {
   event.preventDefault();
+  syncSearchFilter("searchInput");
+  syncSearchFilter("provinceFilter");
+  syncSearchFilter("categoryFilter");
   syncCityFilter("heroCityFilter");
   await loadBusinesses();
-  location.hash = "discover";
+  await navigateTo("/discover");
 });
 
-["provinceFilter", "categoryFilter", "heroCityFilter", "cityFilter", "ratingFilter", "primeFilter", "priceFilter"].forEach((id) => {
+$("#discoverSearch").addEventListener("submit", async (event) => {
+  event.preventDefault();
+  syncSearchFilter("discoverSearchInput");
+  syncSearchFilter("discoverProvinceFilter");
+  syncSearchFilter("discoverCategoryFilter");
+  await loadBusinesses();
+  await navigateTo("/discover");
+});
+
+["searchInput", "discoverSearchInput", "provinceFilter", "discoverProvinceFilter", "categoryFilter", "discoverCategoryFilter", "heroCityFilter", "cityFilter", "ratingFilter", "primeFilter", "priceFilter"].forEach((id) => {
   $(`#${id}`).addEventListener("input", () => {
+    if (["searchInput", "discoverSearchInput", "provinceFilter", "discoverProvinceFilter", "categoryFilter", "discoverCategoryFilter"].includes(id)) syncSearchFilter(id);
     if (id === "heroCityFilter" || id === "cityFilter") syncCityFilter(id);
     loadBusinesses().catch((error) => toast(error.message));
   });
@@ -640,6 +753,7 @@ $("#heroSearch").addEventListener("submit", async (event) => {
 
 $("#nearbyBtn").addEventListener("click", async () => {
   $("#provinceFilter").value = state.user?.province || "Gauteng";
+  syncSearchFilter("provinceFilter");
   $("#cityFilter").value = state.user?.city || "Johannesburg";
   syncCityFilter("cityFilter");
   await loadBusinesses();
@@ -829,4 +943,6 @@ if ("serviceWorker" in navigator) {
   navigator.serviceWorker.register("/sw.js").catch(() => {});
 }
 
-boot().then(renderAdmin);
+window.addEventListener("popstate", () => applyRoute().catch((error) => toast(error.message)));
+
+boot();

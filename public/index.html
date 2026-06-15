@@ -8,17 +8,17 @@
   <title>Connect-ZA | Connecting Professionals</title>
   <link rel="icon" href="/icons/icon.svg" type="image/svg+xml">
   <link rel="manifest" href="/manifest.webmanifest">
-  <link rel="stylesheet" href="/styles.css?v=paystack-1">
+  <link rel="stylesheet" href="/styles.css?v=page-routes-2">
 </head>
 <body>
   <header class="app-header">
-    <a class="brand" href="#home" aria-label="Connect-ZA home">
+    <a class="brand" href="/" data-route="home" aria-label="Connect-ZA home">
       <img class="brand-logo" src="/icons/connect-za-logo.svg" alt="Connect-ZA - Connecting Professionals" width="215" height="48">
     </a>
     <nav class="desktop-nav">
-      <a href="#discover">Discover</a>
-      <a href="#prime">Plans</a>
-      <a href="#legal">Legal</a>
+      <a href="/discover" data-route="discover">Discover</a>
+      <a href="/plans" data-route="plans">Plans</a>
+      <a href="/legal.html">Legal</a>
     </nav>
     <div class="header-actions">
       <button id="themeToggle" class="icon-btn" title="Toggle dark mode">◐</button>
@@ -34,8 +34,8 @@
         <h1>Find trusted companies, compare quotes, and chat instantly.</h1>
         <p class="hero-text">Find verified South African service providers, compare quotes, and connect fast.</p>
         <div class="hero-actions">
-          <a class="primary-btn hero-cta" href="#discover">Explore businesses</a>
-          <a class="secondary-btn hero-cta" href="#prime">View plans</a>
+          <a class="primary-btn hero-cta" href="/discover" data-route="discover">Explore businesses</a>
+          <a class="secondary-btn hero-cta" href="/plans" data-route="plans">View plans</a>
         </div>
         <form id="heroSearch" class="hero-search">
           <input id="searchInput" type="search" placeholder="Search service, company, city..." autocomplete="off">
@@ -81,7 +81,7 @@
       </article>
     </section>
 
-    <section id="discover" class="section">
+    <section id="discover" class="section hidden">
       <div class="section-heading">
         <div>
           <p class="eyebrow">Discover</p>
@@ -89,6 +89,12 @@
         </div>
         <button id="nearbyBtn" class="secondary-btn">Suggested nearby</button>
       </div>
+      <form id="discoverSearch" class="page-search">
+        <input id="discoverSearchInput" type="search" placeholder="Search service, company, city..." autocomplete="off">
+        <select id="discoverProvinceFilter" aria-label="Province"></select>
+        <select id="discoverCategoryFilter" aria-label="Category"></select>
+        <button class="primary-btn" type="submit">Search</button>
+      </form>
       <div id="categoryGrid" class="category-grid"></div>
       <div class="filters">
         <select id="cityFilter" aria-label="South African city or town"></select>
@@ -106,7 +112,7 @@
       <div id="businessGrid" class="business-grid"></div>
     </section>
 
-    <section id="prime" class="prime-section">
+    <section id="prime" class="prime-section hidden">
       <div>
         <p class="eyebrow">Business subscriptions</p>
         <h2>Standard R150/month or PRIME R250/month</h2>
@@ -295,6 +301,6 @@
   </dialog>
 
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
-  <script src="/app.js?v=paystack-1"></script>
+  <script src="/app.js?v=page-routes-2"></script>
 </body>
 </html>

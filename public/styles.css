@@ -140,7 +140,23 @@ a {
   font-size: 0.86rem;
 }
 
-.header-actions, .prime-actions, .filters, .hero-search {
+.desktop-nav a,
+.brand {
+  border-radius: 8px;
+}
+
+.desktop-nav a {
+  padding: 7px 9px;
+  color: color-mix(in srgb, var(--text) 78%, transparent);
+}
+
+.desktop-nav a.active {
+  background: color-mix(in srgb, var(--gold) 16%, transparent);
+  color: var(--text);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--gold) 24%, transparent);
+}
+
+.header-actions, .prime-actions, .filters, .hero-search, .page-search {
   display: flex;
   gap: 10px;
   align-items: center;
@@ -280,6 +296,27 @@ h3 {
 }
 
 .hero-search button {
+  flex: 0 0 auto;
+}
+
+.page-search {
+  margin-bottom: 12px;
+  padding: 8px;
+  background: color-mix(in srgb, var(--surface) 92%, transparent);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  box-shadow: var(--shadow), inset 0 1px color-mix(in srgb, var(--gold) 16%, transparent);
+}
+
+.page-search input {
+  flex: 1 1 240px;
+}
+
+.page-search select {
+  flex: 0 1 180px;
+}
+
+.page-search button {
   flex: 0 0 auto;
 }
 
@@ -690,6 +727,12 @@ textarea {
   background: linear-gradient(145deg, var(--surface), color-mix(in srgb, var(--surface) 82%, var(--brand-2)));
   border: 1px solid var(--line);
   border-radius: 8px;
+}
+
+.profile-toolbar {
+  display: flex;
+  justify-content: flex-start;
+  margin-bottom: 12px;
 }
 
 .profile-cover {
@@ -1248,7 +1291,7 @@ footer {
   .header-actions .icon-btn {
     flex: 0 0 36px;
   }
-  .hero-search, .filters, .prime-section, .prime-actions, .section-heading {
+  .hero-search, .page-search, .filters, .prime-section, .prime-actions, .section-heading {
     flex-direction: column;
     align-items: stretch;
   }
@@ -1784,6 +1827,11 @@ blockquote::before {
 
   .hero-cta {
     width: 100%;
+  }
+
+  .page-search {
+    flex-direction: column;
+    align-items: stretch;
   }
 
   .image-placeholder-copy {

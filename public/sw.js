@@ -1,5 +1,5 @@
-const CACHE = "connect-za-v26-paystack";
-const ASSETS = ["/", "/styles.css?v=paystack-1", "/app.js?v=paystack-1", "/legal.html", "/manifest.webmanifest", "/icons/icon.svg", "/icons/connect-za-logo.svg"];
+const CACHE = "connect-za-v28-page-routes";
+const ASSETS = ["/", "/styles.css?v=page-routes-2", "/app.js?v=page-routes-2", "/legal.html", "/manifest.webmanifest", "/icons/icon.svg", "/icons/connect-za-logo.svg"];
 
 self.addEventListener("install", (event) => {
   event.waitUntil(caches.open(CACHE).then((cache) => cache.addAll(ASSETS)));
