@@ -8,7 +8,7 @@
   <title>Connect-ZA | Connecting Professionals</title>
   <link rel="icon" href="/icons/icon.svg" type="image/svg+xml">
   <link rel="manifest" href="/manifest.webmanifest">
-  <link rel="stylesheet" href="/styles.css?v=review-form-1">
+  <link rel="stylesheet" href="/styles.css?v=profile-picture-1">
 </head>
 <body>
   <header class="app-header">
@@ -264,6 +264,12 @@
         <button type="button" class="business-tab" data-business-tab="photos">Project photos</button>
       </div>
       <div id="businessDetailsPane" class="business-pane">
+        <fieldset class="profile-picture-field">
+          <legend>Business profile picture</legend>
+          <div id="businessLogoEditor" class="business-logo-editor"></div>
+          <input id="bizLogo" type="file" accept="image/*">
+          <small class="upload-note">This image appears as the business profile picture. Project photos stay separate in the gallery tab.</small>
+        </fieldset>
         <div class="business-form-grid">
           <input id="bizName" placeholder="Company name">
           <select id="bizCategory"></select>
@@ -301,6 +307,6 @@
   </dialog>
 
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
-  <script src="/app.js?v=review-form-1"></script>
+  <script src="/app.js?v=profile-picture-1"></script>
 </body>
 </html>

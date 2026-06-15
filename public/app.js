@@ -3,6 +3,7 @@ const state = {
   businesses: [],
   myBusinesses: [],
   editingBusinessId: "",
+  businessLogoDraft: "",
   businessGalleryDraft: [],
   currentBusiness: null,
   conversations: [],
@@ -329,6 +330,23 @@ function setFieldValue(id, value = "") {
   if (node) node.value = value || "";
 }
 
+function renderBusinessLogoEditor() {
+  const node = $("#businessLogoEditor");
+  if (!node) return;
+  node.innerHTML = state.businessLogoDraft ? `
+    <div class="business-logo-preview">
+      <img alt="Business profile picture preview" src="${state.businessLogoDraft}">
+      <button type="button" class="icon-btn remove-business-logo" title="Remove profile picture">x</button>
+    </div>
+  ` : `
+    <div class="business-logo-placeholder">
+      <span>${initials($("#bizName")?.value || "CZ")}</span>
+      <strong>No profile picture yet</strong>
+      <small>Upload a logo, owner portrait, shopfront, or brand image.</small>
+    </div>
+  `;
+}
+
 function renderProjectGalleryEditor() {
   const node = $("#projectGalleryEditor");
   if (!node) return;
@@ -342,6 +360,7 @@ function renderProjectGalleryEditor() {
 
 function populateBusinessForm(business = null) {
   state.editingBusinessId = business?.id || "";
+  state.businessLogoDraft = business?.logo || "";
   state.businessGalleryDraft = Array.isArray(business?.gallery) ? [...business.gallery] : [];
   $("#businessDialogTitle").textContent = business ? "Edit business profile" : "Register your business";
   $("#saveBusinessBtn").textContent = business ? "Update profile" : "Submit for approval";
@@ -358,10 +377,12 @@ function populateBusinessForm(business = null) {
   setFieldValue("bizAddress", business?.address);
   setFieldValue("bizHours", business?.hours);
   setFieldValue("bizPrice", business?.priceRange);
+  $("#bizLogo").value = "";
   $("#bizGallery").value = "";
   $("#bizProofId").value = "";
   $("#bizProofAddress").value = "";
   renderBusinessProfileSelect();
+  renderBusinessLogoEditor();
   renderProjectGalleryEditor();
 }
 
@@ -451,6 +472,10 @@ function renderBusinesses() {
 async function renderProfile(id) {
   const { business, reviews } = await api(`/api/businesses/${id}`);
   state.currentBusiness = business;
+  const galleryItems = Array.isArray(business.gallery) ? business.gallery : [];
+  const profileLogo = business.logo
+    ? `<div class="profile-logo has-image"><img alt="${escapeHtml(business.name)} profile picture" src="${business.logo}"></div>`
+    : `<div class="profile-logo">${initials(business.name)}</div>`;
   const reviewHelp = !state.user
     ? "Sign in as a customer to leave a verified review."
     : state.user.type === "customer"
@@ -468,10 +493,10 @@ async function renderProfile(id) {
       <a class="secondary-btn" href="/discover" data-route="discover">Back to Discover</a>
     </div>
     <article class="profile-hero">
-      <div class="profile-cover" style="background-image:url('${business.cover || business.gallery?.[0] || ""}')"></div>
+      <div class="profile-cover" style="background-image:url('${business.cover || galleryItems[0] || ""}')"></div>
       <div class="profile-content">
         <div>
-          <div class="profile-logo">${initials(business.name)}</div>
+          ${profileLogo}
           <div class="meta-line">
             ${subscriptionBadge(business)}
             ${business.verified ? `<span class="verified-badge">Verified business</span>` : ""}
@@ -480,7 +505,10 @@ async function renderProfile(id) {
           <h2>${business.name}</h2>
           <p>${business.description}</p>
           <div class="service-tags">${business.services.map((service) => `<span>${service}</span>`).join("")}</div>
-          <div class="gallery-grid">${business.gallery.map((item) => `<img alt="${business.name} portfolio" src="${item}">`).join("")}</div>
+          <section class="profile-gallery">
+            <h3>Project photo gallery</h3>
+            <div class="gallery-grid">${galleryItems.map((item) => `<img alt="${business.name} project photo" src="${item}">`).join("") || `<p class="empty-gallery-note">No project photos uploaded yet.</p>`}</div>
+          </section>
           <section class="profile-reviews">
             <div class="review-heading">
               <div>
@@ -605,7 +633,7 @@ async function fileInputsToDataUrls(input) {
 }
 
 function validateBusinessFiles() {
-  const inputs = [$("#bizGallery"), $("#bizProofId"), $("#bizProofAddress")];
+  const inputs = [$("#bizLogo"), $("#bizGallery"), $("#bizProofId"), $("#bizProofAddress")];
   const files = inputs.flatMap((input) => Array.from(input.files || []));
   const oversized = files.find((file) => file.size > MAX_BUSINESS_FILE_BYTES);
   if (oversized) {
@@ -743,6 +771,11 @@ document.addEventListener("click", async (event) => {
       state.businessGalleryDraft.splice(Number(target.dataset.index), 1);
       renderProjectGalleryEditor();
     }
+    if (target.classList.contains("remove-business-logo")) {
+      state.businessLogoDraft = "";
+      $("#bizLogo").value = "";
+      renderBusinessLogoEditor();
+    }
     if (target.classList.contains("business-tab")) {
       setBusinessTab(target.dataset.businessTab);
     }
@@ -854,6 +887,7 @@ $("#saveBusinessBtn").addEventListener("click", async () => {
     button.textContent = isEditing ? "Updating..." : "Submitting...";
     $("#businessMessage").textContent = "Uploading business details...";
     validateBusinessFiles();
+    const uploadedLogo = (await fileInputsToDataUrls($("#bizLogo")))[0];
     const uploadedGallery = (await fileInputsToDataUrls($("#bizGallery"))).map((file) => file.data);
     const proofOfId = (await fileInputsToDataUrls($("#bizProofId")))[0];
     const proofOfAddress = (await fileInputsToDataUrls($("#bizProofAddress")))[0];
@@ -876,6 +910,7 @@ $("#saveBusinessBtn").addEventListener("click", async () => {
       hours: $("#bizHours").value,
       priceRange: $("#bizPrice").value,
       pricingMode: $("#bizPrice").value || "Request quote",
+      logo: uploadedLogo?.data || state.businessLogoDraft || "",
       gallery: [...state.businessGalleryDraft, ...uploadedGallery].slice(0, 12)
     };
     if (Object.keys(verificationDocuments).length) payload.verificationDocuments = verificationDocuments;
@@ -967,6 +1002,22 @@ $("#subscriptionPlan").addEventListener("input", renderPrimePanel);
 $("#bizProfileSelect").addEventListener("input", () => {
   const business = state.myBusinesses.find((item) => item.id === $("#bizProfileSelect").value) || null;
   populateBusinessForm(business);
+});
+
+$("#bizName").addEventListener("input", () => {
+  if (!state.businessLogoDraft) renderBusinessLogoEditor();
+});
+
+$("#bizLogo").addEventListener("change", async () => {
+  try {
+    validateBusinessFiles();
+    const uploadedLogo = (await fileInputsToDataUrls($("#bizLogo")))[0];
+    if (uploadedLogo?.data) state.businessLogoDraft = uploadedLogo.data;
+    renderBusinessLogoEditor();
+  } catch (error) {
+    $("#businessMessage").textContent = error.message;
+    $("#bizLogo").value = "";
+  }
 });
 
 $("#refreshAdmin").addEventListener("click", () => renderAdmin().catch((error) => toast(error.message)));

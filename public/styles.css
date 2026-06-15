@@ -735,6 +735,82 @@ textarea {
   margin-bottom: 12px;
 }
 
+.profile-picture-field {
+  display: grid;
+  gap: 10px;
+  margin: 0 0 12px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--surface-strong) 44%, transparent);
+}
+
+.profile-picture-field legend {
+  padding: 0 6px;
+  color: var(--gold);
+  font-size: 0.72rem;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.business-logo-editor {
+  display: grid;
+  align-items: center;
+}
+
+.business-logo-preview {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.business-logo-preview img {
+  width: 72px;
+  height: 72px;
+  border-radius: 8px;
+  object-fit: cover;
+  border: 1px solid color-mix(in srgb, var(--gold) 32%, transparent);
+  background: var(--surface);
+}
+
+.business-logo-placeholder {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 4px 10px;
+  color: var(--muted);
+}
+
+.business-logo-placeholder span {
+  grid-row: span 2;
+  display: inline-grid;
+  place-items: center;
+  width: 58px;
+  height: 58px;
+  border-radius: 8px;
+  background: linear-gradient(135deg, var(--gold), var(--brand), var(--clay));
+  color: var(--ink);
+  font-weight: 900;
+}
+
+.business-logo-placeholder strong {
+  color: var(--text);
+}
+
+.business-logo-placeholder small {
+  font-size: 0.78rem;
+}
+
+.profile-gallery {
+  display: grid;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.profile-gallery h3 {
+  margin: 0;
+}
+
 .profile-reviews {
   display: grid;
   gap: 10px;
@@ -800,6 +876,17 @@ textarea {
   font-size: 1.25rem;
   margin-top: -52px;
   border: 4px solid var(--surface);
+}
+
+.profile-logo.has-image {
+  background: var(--surface);
+  overflow: hidden;
+}
+
+.profile-logo img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
 }
 
 .gallery-grid {
@@ -1648,6 +1735,14 @@ body::after {
 .profile-logo {
   background: linear-gradient(135deg, var(--gold), var(--brand), var(--clay));
   color: var(--ink);
+}
+
+.profile-logo.has-image {
+  background: var(--surface);
+}
+
+.profile-logo.has-image img {
+  display: block;
 }
 
 blockquote::before {
