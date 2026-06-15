@@ -32,6 +32,10 @@ const SUPABASE_STATE_TABLE = process.env.SUPABASE_STATE_TABLE || "connect_za_sta
 const SUPABASE_STATE_ID = process.env.SUPABASE_STATE_ID || "production";
 const PAYSTACK_SECRET_KEY = process.env.PAYSTACK_SECRET_KEY || "";
 const PAYSTACK_CURRENCY = process.env.PAYSTACK_CURRENCY || "ZAR";
+const YOCO_SECRET_KEY = process.env.YOCO_SECRET_KEY || "";
+const YOCO_WEBHOOK_SECRET = process.env.YOCO_WEBHOOK_SECRET || "";
+const YOCO_CURRENCY = process.env.YOCO_CURRENCY || "ZAR";
+const YOCO_API_BASE = "https://payments.yoco.com/api";
 function configured(value, placeholders) {
   return Boolean(value && !placeholders.some((placeholder) => value.includes(placeholder)));
 }
@@ -265,12 +269,24 @@ function subscriptionPlanAmount(planKey) {
   return SUBSCRIPTION_PLANS[subscriptionPlanKey(planKey)].amount;
 }
 
-function amountToPaystackSubunit(amount) {
+function amountToCents(amount) {
   return Math.round(Number(amount || 0) * 100);
+}
+
+function amountToPaystackSubunit(amount) {
+  return amountToCents(amount);
 }
 
 function paystackConfigured() {
   return configured(PAYSTACK_SECRET_KEY, ["your-paystack-secret-key", "sk_test_xxx", "sk_live_xxx"]);
+}
+
+function yocoConfigured() {
+  return configured(YOCO_SECRET_KEY, ["your-yoco-secret-key", "sk_test_xxx", "sk_live_xxx"]);
+}
+
+function yocoWebhookConfigured() {
+  return configured(YOCO_WEBHOOK_SECRET, ["your-yoco-webhook-secret", "whsec_xxx"]);
 }
 
 function publicBaseUrl(req) {
@@ -318,6 +334,10 @@ function paystackReference() {
   return `CZ${Date.now()}${crypto.randomBytes(5).toString("hex").toUpperCase()}`;
 }
 
+function paymentReference() {
+  return `CZ${Date.now()}${crypto.randomBytes(5).toString("hex").toUpperCase()}`;
+}
+
 async function initializePaystackCheckout(req, user, business, plan, autoRenew) {
   const amount = subscriptionPlanAmount(plan);
   const reference = paystackReference();
@@ -349,6 +369,71 @@ async function initializePaystackCheckout(req, user, business, plan, autoRenew) 
   };
 }
 
+async function yocoRequest(method, endpoint, body, idempotencyKey = "") {
+  if (!yocoConfigured()) {
+    const error = new Error("Yoco is not configured yet. Add YOCO_SECRET_KEY in Render environment variables.");
+    error.statusCode = 503;
+    throw error;
+  }
+  const headers = {
+    Authorization: `Bearer ${YOCO_SECRET_KEY}`,
+    "Content-Type": "application/json"
+  };
+  if (idempotencyKey) headers["Idempotency-Key"] = idempotencyKey;
+  const response = await fetch(`${YOCO_API_BASE}${endpoint}`, {
+    method,
+    headers,
+    body: body ? JSON.stringify(body) : undefined
+  });
+  const text = await response.text();
+  const payload = text ? JSON.parse(text) : {};
+  if (!response.ok) {
+    const message = payload.message || payload.error || payload.detail || `Yoco ${method} ${endpoint} failed.`;
+    const error = new Error(message);
+    error.statusCode = response.status >= 400 ? response.status : 502;
+    throw error;
+  }
+  return payload;
+}
+
+async function initializeYocoCheckout(req, user, business, plan, autoRenew) {
+  const amount = subscriptionPlanAmount(plan);
+  const reference = paymentReference();
+  const baseUrl = publicBaseUrl(req);
+  const query = `gateway=Yoco&businessId=${encodeURIComponent(business.id)}&reference=${encodeURIComponent(reference)}&plan=${encodeURIComponent(plan)}`;
+  const payload = {
+    amount: amountToCents(amount),
+    currency: YOCO_CURRENCY,
+    successUrl: `${baseUrl}/payment-success.html?${query}`,
+    cancelUrl: `${baseUrl}/payment-success.html?${query}&status=cancelled`,
+    failureUrl: `${baseUrl}/payment-success.html?${query}&status=failed`,
+    clientReferenceId: business.id,
+    externalId: reference,
+    metadata: {
+      businessId: business.id,
+      businessName: business.name,
+      plan,
+      planLabel: subscriptionPlanLabel(plan),
+      autoRenew: Boolean(autoRenew),
+      reference,
+      source: "connect-za"
+    }
+  };
+  const data = await yocoRequest("POST", "/checkouts", payload, reference);
+  if (!data.redirectUrl || !data.id) {
+    const error = new Error("Yoco did not return a checkout URL.");
+    error.statusCode = 502;
+    throw error;
+  }
+  return {
+    checkoutId: data.id,
+    reference,
+    authorizationUrl: data.redirectUrl,
+    processingMode: data.processingMode || "",
+    merchantId: data.merchantId || ""
+  };
+}
+
 function verifyPaystackSignature(rawBody, signature) {
   if (!paystackConfigured() || !signature) return false;
   const expected = crypto.createHmac("sha512", PAYSTACK_SECRET_KEY).update(rawBody).digest("hex");
@@ -357,11 +442,52 @@ function verifyPaystackSignature(rawBody, signature) {
   return crypto.timingSafeEqual(Buffer.from(expected), Buffer.from(received));
 }
 
+function verifyYocoWebhookSignature(rawBody, headers) {
+  const webhookId = headers["webhook-id"];
+  const timestamp = headers["webhook-timestamp"];
+  const signatureHeader = headers["webhook-signature"];
+  if (!yocoWebhookConfigured() || !webhookId || !timestamp || !signatureHeader) return false;
+  const timestampSeconds = Number(timestamp);
+  if (!Number.isFinite(timestampSeconds)) return false;
+  const ageSeconds = Math.abs(Math.floor(Date.now() / 1000) - timestampSeconds);
+  if (ageSeconds > 180) return false;
+  const secret = YOCO_WEBHOOK_SECRET.replace(/^whsec_/, "");
+  const secretBytes = Buffer.from(secret, "base64");
+  const signedContent = `${webhookId}.${timestamp}.${rawBody}`;
+  const expected = crypto.createHmac("sha256", secretBytes).update(signedContent).digest("base64");
+  return String(signatureHeader).split(" ").some((signature) => {
+    const [, value] = signature.split(",");
+    return value && value.length === expected.length && crypto.timingSafeEqual(Buffer.from(value), Buffer.from(expected));
+  });
+}
+
 function findBusinessForPaystackTransaction(db, transaction, fallbackBusinessId) {
   const reference = transaction?.reference || transaction?.metadata?.reference;
   return db.businesses.find((business) => {
     if (fallbackBusinessId && business.id === fallbackBusinessId) return true;
     return business.subscription?.reference === reference || business.subscription?.checkoutId === reference;
+  });
+}
+
+function findBusinessForYocoEvent(db, event, fallbackBusinessId = "") {
+  const payload = event?.payload || {};
+  const metadata = payload.metadata || event?.metadata || {};
+  const identifiers = new Set([
+    fallbackBusinessId,
+    metadata.businessId,
+    payload.clientReferenceId,
+    metadata.checkoutId,
+    metadata.reference,
+    payload.externalId,
+    event.externalId
+  ].filter(Boolean).map(String));
+  return db.businesses.find((business) => {
+    if (identifiers.has(business.id)) return true;
+    return [
+      business.subscription?.checkoutId,
+      business.subscription?.reference,
+      business.subscription?.yocoCheckoutId
+    ].some((value) => value && identifiers.has(String(value)));
   });
 }
 
@@ -398,6 +524,44 @@ function applyVerifiedPaystackPayment(db, business, transaction) {
   business.subscription.paystackTransactionId = transaction.id || transaction.transactionId || "";
   business.subscription.paystackChannel = transaction.channel || "";
   business.subscription.currency = transaction.currency || PAYSTACK_CURRENCY;
+  business.subscription.nextBillingDate = null;
+  refreshSubscriptionAnalytics(db);
+  return plan;
+}
+
+function applyVerifiedYocoPayment(db, business, event) {
+  const payload = event?.payload || {};
+  const metadata = payload.metadata || {};
+  if (!business?.subscription) {
+    const error = new Error("Yoco payment could not be matched to a business subscription.");
+    error.statusCode = 404;
+    throw error;
+  }
+  const checkoutId = metadata.checkoutId || business.subscription.checkoutId || business.subscription.yocoCheckoutId || "";
+  const reference = metadata.reference || business.subscription.reference || "";
+  const status = String(payload.status || "").toLowerCase();
+  if (event.type !== "payment.succeeded" && status !== "succeeded") {
+    const error = new Error(`Yoco payment is ${payload.status || event.type || "not successful"}.`);
+    error.statusCode = 400;
+    throw error;
+  }
+  const plan = subscriptionPlanKey(business.subscription.plan || metadata.plan || business.subscriptionPlan, "standard");
+  const expectedAmount = amountToCents(subscriptionPlanAmount(plan));
+  if (Number(payload.amount || 0) < expectedAmount) {
+    const error = new Error("Yoco payment amount is lower than the selected subscription plan.");
+    error.statusCode = 400;
+    throw error;
+  }
+  setBusinessSubscriptionStatus(business, plan, "pending");
+  business.subscription.gateway = "Yoco";
+  business.subscription.reference = reference || business.subscription.reference;
+  business.subscription.checkoutId = checkoutId || business.subscription.checkoutId;
+  business.subscription.yocoCheckoutId = checkoutId || business.subscription.yocoCheckoutId;
+  business.subscription.paymentStatus = "paid_pending_admin";
+  business.subscription.paidAt = payload.createdDate || event.createdDate || new Date().toISOString();
+  business.subscription.yocoPaymentId = payload.id || "";
+  business.subscription.yocoMode = payload.mode || "";
+  business.subscription.currency = payload.currency || YOCO_CURRENCY;
   business.subscription.nextBillingDate = null;
   refreshSubscriptionAnalytics(db);
   return plan;
@@ -1116,31 +1280,43 @@ async function api(req, res, pathname, query) {
       return sendJson(res, { error: `${subscriptionPlanLabel(plan)} is already active for this business.` }, 400);
     }
     const gateway = ["Paystack", "PayFast", "Ozow", "Yoco", "Stripe"].includes(body.gateway) ? body.gateway : "Paystack";
-    let paystackCheckout = null;
+    let gatewayCheckout = null;
     if (gateway === "Paystack") {
-      paystackCheckout = await initializePaystackCheckout(req, user, business, plan, body.autoRenew);
+      const checkout = await initializePaystackCheckout(req, user, business, plan, body.autoRenew);
+      gatewayCheckout = {
+        checkoutId: checkout.reference,
+        reference: checkout.reference,
+        authorizationUrl: checkout.authorizationUrl,
+        accessCode: checkout.accessCode
+      };
+    }
+    if (gateway === "Yoco") {
+      gatewayCheckout = await initializeYocoCheckout(req, user, business, plan, body.autoRenew);
     }
     setBusinessSubscriptionStatus(business, plan, "pending");
-    const checkoutId = paystackCheckout?.reference || uid("pay");
+    const checkoutId = gatewayCheckout?.checkoutId || gatewayCheckout?.reference || uid("pay");
     business.subscription = {
       plan,
       planLabel: subscriptionPlanLabel(plan),
       gateway,
       amount: subscriptionPlanAmount(plan),
-      currency: gateway === "Paystack" ? PAYSTACK_CURRENCY : "ZAR",
+      currency: gateway === "Paystack" ? PAYSTACK_CURRENCY : gateway === "Yoco" ? YOCO_CURRENCY : "ZAR",
       autoRenew: Boolean(body.autoRenew),
       paymentStatus: "checkout_created",
       requestedAt: new Date().toISOString(),
       nextBillingDate: null,
       checkoutId,
-      reference: checkoutId
+      reference: gatewayCheckout?.reference || checkoutId
     };
-    if (paystackCheckout) {
-      business.subscription.accessCode = paystackCheckout.accessCode;
-      business.subscription.authorizationUrl = paystackCheckout.authorizationUrl;
+    if (gatewayCheckout) {
+      if (gatewayCheckout.accessCode) business.subscription.accessCode = gatewayCheckout.accessCode;
+      if (gatewayCheckout.authorizationUrl) business.subscription.authorizationUrl = gatewayCheckout.authorizationUrl;
+      if (gatewayCheckout.processingMode) business.subscription.yocoProcessingMode = gatewayCheckout.processingMode;
+      if (gatewayCheckout.merchantId) business.subscription.yocoMerchantId = gatewayCheckout.merchantId;
+      if (gateway === "Yoco") business.subscription.yocoCheckoutId = gatewayCheckout.checkoutId;
     }
     await writeDb(db);
-    const redirectUrl = paystackCheckout?.authorizationUrl || `/payment-success.html?businessId=${encodeURIComponent(business.id)}&gateway=${encodeURIComponent(gateway)}&checkoutId=${encodeURIComponent(business.subscription.checkoutId)}&plan=${encodeURIComponent(plan)}`;
+    const redirectUrl = gatewayCheckout?.authorizationUrl || `/payment-success.html?businessId=${encodeURIComponent(business.id)}&gateway=${encodeURIComponent(gateway)}&checkoutId=${encodeURIComponent(business.subscription.checkoutId)}&plan=${encodeURIComponent(plan)}`;
     return sendJson(res, { checkoutId: business.subscription.checkoutId, gateway, plan, planLabel: subscriptionPlanLabel(plan), amount: business.subscription.amount, redirectUrl });
   }
 
@@ -1163,6 +1339,27 @@ async function api(req, res, pathname, query) {
     });
   }
 
+  if (req.method === "GET" && pathname === "/api/payments/yoco/status") {
+    const businessId = String(query.businessId || "");
+    const checkoutId = String(query.checkoutId || "");
+    const reference = String(query.reference || "");
+    const business = db.businesses.find((biz) => {
+      if (businessId && biz.id !== businessId) return false;
+      return [biz.subscription?.checkoutId, biz.subscription?.reference, biz.subscription?.yocoCheckoutId].some((value) => value && [checkoutId, reference].includes(String(value)));
+    });
+    if (!business) return sendJson(res, { error: "Yoco checkout could not be found." }, 404);
+    const paid = business.subscription?.gateway === "Yoco" && business.subscription?.paymentStatus === "paid_pending_admin";
+    return sendJson(res, {
+      ok: true,
+      paid,
+      gateway: "Yoco",
+      businessId: business.id,
+      plan: business.subscription?.plan || business.subscriptionPlan,
+      status: business.subscriptionStatus,
+      paymentStatus: business.subscription?.paymentStatus || "unknown"
+    });
+  }
+
   if (req.method === "POST" && pathname === "/api/payments/webhook") {
     const signature = req.headers["x-paystack-signature"];
     if (signature) {
@@ -1182,7 +1379,26 @@ async function api(req, res, pathname, query) {
       }
       return sendJson(res, { received: true });
     }
+    if (req.headers["webhook-signature"]) {
+      const rawBody = await readRawBody(req);
+      if (!verifyYocoWebhookSignature(rawBody, req.headers)) {
+        return sendJson(res, { error: "Invalid Yoco signature." }, 401);
+      }
+      const event = parseJsonBody(rawBody);
+      if (event.type === "payment.succeeded" || event.payload?.status === "succeeded") {
+        const business = findBusinessForYocoEvent(db, event, event.payload?.metadata?.businessId);
+        if (business) {
+          applyVerifiedYocoPayment(db, business, event);
+          await writeDb(db);
+          broadcast("subscription", publicBusiness(business));
+        }
+      }
+      return sendJson(res, { received: true });
+    }
     const body = await readBody(req);
+    if (String(body.gateway || "").toLowerCase() === "yoco") {
+      return sendJson(res, { error: "Yoco payments are confirmed by signed Yoco webhooks only." }, 400);
+    }
     const business = db.businesses.find((biz) => biz.id === body.businessId);
     if (!business) return sendJson(res, { error: "Business not found." }, 404);
     if (!business.subscription?.checkoutId || business.subscription.checkoutId !== body.checkoutId) {

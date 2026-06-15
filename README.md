@@ -68,8 +68,34 @@ https://connect-za.com/api/payments/webhook
 
 4. The app sends customers to Paystack checkout for Standard and PRIME subscriptions, then verifies the returned transaction reference at `/api/payments/paystack/verify`. Successful Paystack payments are marked as `paid_pending_admin` until an admin approves the subscription.
 
+## Connect Yoco
+
+1. In the Yoco App, open the Yoco payment gateway/API keys area and copy your secret key.
+2. In Render, add:
+
+```env
+YOCO_SECRET_KEY=sk_live_your_yoco_secret_key
+YOCO_CURRENCY=ZAR
+```
+
+Use `sk_test_...` while testing, then switch to `sk_live_...` for production.
+
+3. Register one Yoco Checkout webhook pointing to:
+
+```text
+https://connect-za.com/api/payments/webhook
+```
+
+Yoco returns a webhook secret once when the webhook is created. Save it in Render as:
+
+```env
+YOCO_WEBHOOK_SECRET=whsec_your_yoco_webhook_secret
+```
+
+4. Redeploy the Render service. When a business selects Yoco, the app creates a hosted Yoco checkout for Standard or PRIME and waits for Yoco's signed `payment.succeeded` webhook before marking the subscription as `paid_pending_admin`.
+
 ## Production integration notes
 
-The app is dependency-light and uses Supabase for persistence when configured, with `data/db.json` as local fallback. For a larger production build, split the JSON state into normalized Supabase tables, connect Supabase Auth or another hardened auth service, move gallery uploads to Supabase Storage or S3, and replace the remaining PayFast, Ozow, Yoco, and Stripe placeholders with signed checkout/webhook implementations.
+The app is dependency-light and uses Supabase for persistence when configured, with `data/db.json` as local fallback. For a larger production build, split the JSON state into normalized Supabase tables, connect Supabase Auth or another hardened auth service, move gallery uploads to Supabase Storage or S3, and replace the remaining PayFast, Ozow, and Stripe placeholders with signed checkout/webhook implementations.
 
 The PWA manifest makes the responsive web app installable. For Android/iOS app-store builds, wrap the web app with Capacitor or migrate the UI flows to React Native/Flutter using the same API contracts.

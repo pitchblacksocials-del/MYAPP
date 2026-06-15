@@ -19,6 +19,7 @@
     const button = document.getElementById("activatePayment");
     const status = document.getElementById("paymentStatus");
     let processing = false;
+    let yocoPolls = 0;
 
     async function confirmPrimePayment() {
       if (processing) return;
@@ -29,9 +30,26 @@
       try {
         const gateway = params.get("gateway");
         const reference = params.get("reference") || params.get("trxref");
-        const response = gateway === "Paystack"
-          ? await fetch(`/api/payments/paystack/verify?reference=${encodeURIComponent(reference || "")}&businessId=${encodeURIComponent(params.get("businessId") || "")}`)
-          : await fetch("/api/payments/webhook", {
+        const checkoutStatus = params.get("status");
+        if (gateway === "Yoco" && checkoutStatus === "cancelled") {
+          status.textContent = "Yoco checkout was cancelled. No subscription payment was recorded.";
+          button.textContent = "Return to Connect-ZA";
+          button.disabled = false;
+          return;
+        }
+        if (gateway === "Yoco" && checkoutStatus === "failed") {
+          status.textContent = "Yoco checkout did not complete successfully. Please try again from Connect-ZA.";
+          button.textContent = "Return to Connect-ZA";
+          button.disabled = false;
+          return;
+        }
+        let response;
+        if (gateway === "Paystack") {
+          response = await fetch(`/api/payments/paystack/verify?reference=${encodeURIComponent(reference || "")}&businessId=${encodeURIComponent(params.get("businessId") || "")}`);
+        } else if (gateway === "Yoco") {
+          response = await fetch(`/api/payments/yoco/status?reference=${encodeURIComponent(reference || "")}&checkoutId=${encodeURIComponent(params.get("checkoutId") || "")}&businessId=${encodeURIComponent(params.get("businessId") || "")}`);
+        } else {
+          response = await fetch("/api/payments/webhook", {
               method: "POST",
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify({
@@ -41,8 +59,20 @@
                 plan: params.get("plan")
               })
             });
+        }
         const data = await response.json().catch(() => ({}));
         if (!response.ok) throw new Error(data.error || "Payment confirmation failed.");
+        if (gateway === "Yoco" && !data.paid) {
+          status.textContent = "Yoco checkout completed. Waiting for secure payment confirmation from Yoco...";
+          if (yocoPolls < 8) {
+            yocoPolls += 1;
+            setTimeout(confirmPrimePayment, 3000);
+          } else {
+            button.textContent = "Check again";
+            button.disabled = false;
+          }
+          return;
+        }
         status.textContent = "Your subscription request is paid and pending admin approval.";
         button.textContent = "Return to Connect-ZA";
         button.disabled = false;
