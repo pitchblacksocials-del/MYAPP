@@ -54,6 +54,8 @@ const SUBSCRIPTION_PLANS = {
   prime: { label: "PRIME", amount: 250 }
 };
 const SUBSCRIPTION_STATUSES = ["active", "pending", "inactive", "suspended"];
+const MAX_PROJECTS = 3;
+const MAX_PROJECT_PHOTOS = 5;
 
 const categories = [
   "Construction",
@@ -188,6 +190,34 @@ const cities = [
 
 function canonicalFromList(value, list) {
   return list.find((item) => item.toLowerCase() === String(value || "").trim().toLowerCase()) || "";
+}
+
+function normalizeBusinessProjects(projectsInput = [], galleryInput = []) {
+  const projects = Array.isArray(projectsInput) ? projectsInput.map((project, index) => ({
+    name: String(project?.name || `Project ${index + 1}`).trim(),
+    photos: Array.isArray(project?.photos) ? project.photos.map(String).filter(Boolean).slice(0, MAX_PROJECT_PHOTOS) : []
+  })).filter((project) => project.name || project.photos.length).slice(0, MAX_PROJECTS) : [];
+
+  if (projects.length) {
+    return projects.map((project, index) => ({
+      name: project.name || `Project ${index + 1}`,
+      photos: project.photos.slice(0, MAX_PROJECT_PHOTOS)
+    })).filter((project) => project.photos.length);
+  }
+
+  const legacyPhotos = Array.isArray(galleryInput) ? galleryInput.map(String).filter(Boolean).slice(0, MAX_PROJECTS * MAX_PROJECT_PHOTOS) : [];
+  const legacyProjects = [];
+  for (let index = 0; index < legacyPhotos.length; index += MAX_PROJECT_PHOTOS) {
+    legacyProjects.push({
+      name: `Project ${legacyProjects.length + 1}`,
+      photos: legacyPhotos.slice(index, index + MAX_PROJECT_PHOTOS)
+    });
+  }
+  return legacyProjects.slice(0, MAX_PROJECTS);
+}
+
+function flattenBusinessProjects(projects) {
+  return normalizeBusinessProjects(projects).flatMap((project) => project.photos).slice(0, MAX_PROJECTS * MAX_PROJECT_PHOTOS);
 }
 
 function uid(prefix) {
@@ -720,6 +750,7 @@ function sanitizeBusiness(input, ownerId) {
   const services = Array.isArray(input.services) ? input.services : String(input.services || "").split(",");
   const province = canonicalFromList(input.province, provinces);
   const city = canonicalFromList(input.city, cities);
+  const projects = normalizeBusinessProjects(input.projects, input.gallery);
   return {
     ownerId,
     status: "pending",
@@ -748,7 +779,8 @@ function sanitizeBusiness(input, ownerId) {
     reviewCount: 0,
     lat: Number(input.lat || 0),
     lng: Number(input.lng || 0),
-    gallery: Array.isArray(input.gallery) ? input.gallery : [],
+    projects,
+    gallery: flattenBusinessProjects(projects),
     verificationDocuments: {
       proofOfId: input.verificationDocuments?.proofOfId || null,
       proofOfAddress: input.verificationDocuments?.proofOfAddress || null,
@@ -776,7 +808,10 @@ function updateBusinessProfile(business, input) {
   business.hours = String(input.hours ?? business.hours ?? "").trim();
   business.pricingMode = String(input.pricingMode ?? business.pricingMode ?? "Request quote");
   business.priceRange = String(input.priceRange ?? business.priceRange ?? "Request quote");
-  if (Array.isArray(input.gallery)) business.gallery = input.gallery.map(String).filter(Boolean).slice(0, 12);
+  if (input.projects !== undefined || Array.isArray(input.gallery)) {
+    business.projects = normalizeBusinessProjects(input.projects, input.gallery || business.gallery);
+    business.gallery = flattenBusinessProjects(business.projects);
+  }
   if (input.cover !== undefined) business.cover = String(input.cover || "");
   if (input.logo !== undefined) business.logo = String(input.logo || "");
   if (input.verificationDocuments?.proofOfId || input.verificationDocuments?.proofOfAddress) {

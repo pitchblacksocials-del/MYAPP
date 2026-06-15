@@ -1,5 +1,5 @@
-const CACHE = "connect-za-v30-profile-picture";
-const ASSETS = ["/", "/styles.css?v=profile-picture-1", "/app.js?v=profile-picture-1", "/legal.html", "/manifest.webmanifest", "/icons/icon.svg", "/icons/connect-za-logo.svg"];
+const CACHE = "connect-za-v31-profile-projects";
+const ASSETS = ["/", "/styles.css?v=profile-projects-1", "/app.js?v=profile-projects-1", "/legal.html", "/manifest.webmanifest", "/icons/icon.svg", "/icons/connect-za-logo.svg"];
 
 self.addEventListener("install", (event) => {
   event.waitUntil(caches.open(CACHE).then((cache) => cache.addAll(ASSETS)));

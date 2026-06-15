@@ -4,7 +4,8 @@ const state = {
   myBusinesses: [],
   editingBusinessId: "",
   businessLogoDraft: "",
-  businessGalleryDraft: [],
+  businessCoverDraft: "",
+  businessProjectsDraft: [],
   currentBusiness: null,
   conversations: [],
   activeConversation: null,
@@ -67,6 +68,8 @@ const subscriptionPlans = {
   standard: { label: "Standard", amount: 150 },
   prime: { label: "PRIME", amount: 250 }
 };
+const MAX_PROJECTS = 3;
+const MAX_PROJECT_PHOTOS = 5;
 const MAX_BUSINESS_FILE_BYTES = 8 * 1024 * 1024;
 const MAX_BUSINESS_UPLOAD_BYTES = 20 * 1024 * 1024;
 
@@ -79,6 +82,36 @@ function subscriptionBadge(business) {
   if (business.primeStatus === "active") return `<span class="prime-badge">PRIME</span>`;
   if (business.subscriptionPlan === "standard" && business.subscriptionStatus === "active") return `<span class="standard-badge">STANDARD</span>`;
   return "";
+}
+
+function normalizeProjects(projects = [], fallbackGallery = []) {
+  const normalized = Array.isArray(projects) ? projects.map((project, index) => ({
+    name: String(project?.name || `Project ${index + 1}`).trim(),
+    photos: Array.isArray(project?.photos) ? project.photos.map(String).filter(Boolean).slice(0, MAX_PROJECT_PHOTOS) : []
+  })).filter((project) => project.name || project.photos.length).slice(0, MAX_PROJECTS) : [];
+
+  if (normalized.length) return normalized.map((project, index) => ({
+    name: project.name || `Project ${index + 1}`,
+    photos: project.photos.slice(0, MAX_PROJECT_PHOTOS)
+  }));
+
+  const legacyPhotos = Array.isArray(fallbackGallery) ? fallbackGallery.map(String).filter(Boolean).slice(0, MAX_PROJECTS * MAX_PROJECT_PHOTOS) : [];
+  const legacyProjects = [];
+  for (let index = 0; index < legacyPhotos.length; index += MAX_PROJECT_PHOTOS) {
+    legacyProjects.push({
+      name: `Project ${legacyProjects.length + 1}`,
+      photos: legacyPhotos.slice(index, index + MAX_PROJECT_PHOTOS)
+    });
+  }
+  return legacyProjects.slice(0, MAX_PROJECTS);
+}
+
+function projectPhotos(business) {
+  return normalizeProjects(business?.projects, business?.gallery).flatMap((project) => project.photos).slice(0, MAX_PROJECTS * MAX_PROJECT_PHOTOS);
+}
+
+function firstBusinessPhoto(business) {
+  return business?.cover || projectPhotos(business)[0] || business?.gallery?.[0] || business?.logo || "";
 }
 
 function fillSelect(node, values, placeholder) {
@@ -347,21 +380,63 @@ function renderBusinessLogoEditor() {
   `;
 }
 
+function renderBusinessCoverEditor() {
+  const node = $("#businessCoverEditor");
+  if (!node) return;
+  node.innerHTML = state.businessCoverDraft ? `
+    <div class="business-cover-preview">
+      <img alt="Business banner picture preview" src="${state.businessCoverDraft}">
+      <button type="button" class="icon-btn remove-business-cover" title="Remove banner picture">x</button>
+    </div>
+  ` : `
+    <div class="business-cover-placeholder">
+      <strong>No banner picture yet</strong>
+      <small>Upload a wide project, storefront, team, or brand image.</small>
+    </div>
+  `;
+}
+
+function ensureProjectDrafts() {
+  if (!state.businessProjectsDraft.length) {
+    state.businessProjectsDraft = [{ name: "Project 1", photos: [] }];
+  }
+}
+
 function renderProjectGalleryEditor() {
   const node = $("#projectGalleryEditor");
   if (!node) return;
-  node.innerHTML = state.businessGalleryDraft.map((item, index) => `
-    <article class="project-photo-tile">
-      <img alt="Project photo ${index + 1}" src="${item}">
-      <button type="button" class="icon-btn remove-project-photo" data-index="${index}" title="Remove project photo">x</button>
+  ensureProjectDrafts();
+  node.innerHTML = state.businessProjectsDraft.map((project, projectIndex) => `
+    <article class="project-editor">
+      <div class="project-editor-head">
+        <input class="project-name-input" data-project-index="${projectIndex}" value="${escapeHtml(project.name || `Project ${projectIndex + 1}`)}" placeholder="Project name">
+        <button type="button" class="secondary-btn remove-project" data-project-index="${projectIndex}" ${state.businessProjectsDraft.length <= 1 ? "disabled" : ""}>Remove project</button>
+      </div>
+      <div class="project-photo-grid">
+        ${(project.photos || []).map((item, photoIndex) => `
+          <article class="project-photo-tile">
+            <img alt="${escapeHtml(project.name || `Project ${projectIndex + 1}`)} photo ${photoIndex + 1}" src="${item}">
+            <button type="button" class="icon-btn remove-project-photo" data-project-index="${projectIndex}" data-photo-index="${photoIndex}" title="Remove project photo">x</button>
+          </article>
+        `).join("") || `<p class="empty-gallery-note">No photos for this project yet.</p>`}
+      </div>
+      <label class="project-upload">
+        <span>Add photos</span>
+        <input class="project-photo-input" data-project-index="${projectIndex}" type="file" multiple accept="image/*">
+      </label>
+      <small class="upload-note">${(project.photos || []).length}/${MAX_PROJECT_PHOTOS} photos used</small>
     </article>
-  `).join("") || `<p class="empty-gallery-note">No project photos yet. Add completed-work images below.</p>`;
+  `).join("") + `
+    <button type="button" class="secondary-btn add-project" ${state.businessProjectsDraft.length >= MAX_PROJECTS ? "disabled" : ""}>Add project</button>
+  `;
 }
 
 function populateBusinessForm(business = null) {
   state.editingBusinessId = business?.id || "";
   state.businessLogoDraft = business?.logo || "";
-  state.businessGalleryDraft = Array.isArray(business?.gallery) ? [...business.gallery] : [];
+  state.businessCoverDraft = business?.cover || "";
+  state.businessProjectsDraft = normalizeProjects(business?.projects, business?.gallery);
+  ensureProjectDrafts();
   $("#businessDialogTitle").textContent = business ? "Edit business profile" : "Register your business";
   $("#saveBusinessBtn").textContent = business ? "Update profile" : "Submit for approval";
   $("#businessMessage").textContent = "";
@@ -378,11 +453,12 @@ function populateBusinessForm(business = null) {
   setFieldValue("bizHours", business?.hours);
   setFieldValue("bizPrice", business?.priceRange);
   $("#bizLogo").value = "";
-  $("#bizGallery").value = "";
+  $("#bizCover").value = "";
   $("#bizProofId").value = "";
   $("#bizProofAddress").value = "";
   renderBusinessProfileSelect();
   renderBusinessLogoEditor();
+  renderBusinessCoverEditor();
   renderProjectGalleryEditor();
 }
 
@@ -443,7 +519,7 @@ function renderCategories() {
 function renderBusinesses() {
   $("#businessGrid").innerHTML = state.businesses.map((biz) => `
     <article class="business-card ${biz.primeStatus === "active" ? "prime" : ""}">
-      <div class="card-media" style="background-image:url('${biz.gallery?.[0] || ""}')"></div>
+      <div class="card-media" style="background-image:url('${firstBusinessPhoto(biz)}')"></div>
       <div class="card-body">
         <div class="card-title-row">
           <div>
@@ -472,7 +548,8 @@ function renderBusinesses() {
 async function renderProfile(id) {
   const { business, reviews } = await api(`/api/businesses/${id}`);
   state.currentBusiness = business;
-  const galleryItems = Array.isArray(business.gallery) ? business.gallery : [];
+  const projects = normalizeProjects(business.projects, business.gallery);
+  const galleryItems = projectPhotos(business);
   const profileLogo = business.logo
     ? `<div class="profile-logo has-image"><img alt="${escapeHtml(business.name)} profile picture" src="${business.logo}"></div>`
     : `<div class="profile-logo">${initials(business.name)}</div>`;
@@ -507,7 +584,12 @@ async function renderProfile(id) {
           <div class="service-tags">${business.services.map((service) => `<span>${service}</span>`).join("")}</div>
           <section class="profile-gallery">
             <h3>Project photo gallery</h3>
-            <div class="gallery-grid">${galleryItems.map((item) => `<img alt="${business.name} project photo" src="${item}">`).join("") || `<p class="empty-gallery-note">No project photos uploaded yet.</p>`}</div>
+            <div class="project-gallery-groups">${projects.map((project) => `
+              <article class="profile-project-group">
+                <h4>${escapeHtml(project.name)}</h4>
+                <div class="gallery-grid">${project.photos.map((item) => `<img alt="${escapeHtml(project.name)} project photo" src="${item}">`).join("") || `<p class="empty-gallery-note">No photos uploaded for this project yet.</p>`}</div>
+              </article>
+            `).join("") || `<p class="empty-gallery-note">No project photos uploaded yet.</p>`}</div>
           </section>
           <section class="profile-reviews">
             <div class="review-heading">
@@ -633,7 +715,7 @@ async function fileInputsToDataUrls(input) {
 }
 
 function validateBusinessFiles() {
-  const inputs = [$("#bizLogo"), $("#bizGallery"), $("#bizProofId"), $("#bizProofAddress")];
+  const inputs = [$("#bizLogo"), $("#bizCover"), $("#bizProofId"), $("#bizProofAddress"), ...$$(".project-photo-input")].filter(Boolean);
   const files = inputs.flatMap((input) => Array.from(input.files || []));
   const oversized = files.find((file) => file.size > MAX_BUSINESS_FILE_BYTES);
   if (oversized) {
@@ -768,13 +850,30 @@ document.addEventListener("click", async (event) => {
       renderConversations();
     }
     if (target.classList.contains("remove-project-photo")) {
-      state.businessGalleryDraft.splice(Number(target.dataset.index), 1);
+      const projectIndex = Number(target.dataset.projectIndex);
+      const photoIndex = Number(target.dataset.photoIndex);
+      state.businessProjectsDraft[projectIndex]?.photos.splice(photoIndex, 1);
+      renderProjectGalleryEditor();
+    }
+    if (target.classList.contains("remove-project")) {
+      state.businessProjectsDraft.splice(Number(target.dataset.projectIndex), 1);
+      ensureProjectDrafts();
+      renderProjectGalleryEditor();
+    }
+    if (target.classList.contains("add-project")) {
+      if (state.businessProjectsDraft.length >= MAX_PROJECTS) return toast("Each business can have up to 3 projects.");
+      state.businessProjectsDraft.push({ name: `Project ${state.businessProjectsDraft.length + 1}`, photos: [] });
       renderProjectGalleryEditor();
     }
     if (target.classList.contains("remove-business-logo")) {
       state.businessLogoDraft = "";
       $("#bizLogo").value = "";
       renderBusinessLogoEditor();
+    }
+    if (target.classList.contains("remove-business-cover")) {
+      state.businessCoverDraft = "";
+      $("#bizCover").value = "";
+      renderBusinessCoverEditor();
     }
     if (target.classList.contains("business-tab")) {
       setBusinessTab(target.dataset.businessTab);
@@ -888,7 +987,7 @@ $("#saveBusinessBtn").addEventListener("click", async () => {
     $("#businessMessage").textContent = "Uploading business details...";
     validateBusinessFiles();
     const uploadedLogo = (await fileInputsToDataUrls($("#bizLogo")))[0];
-    const uploadedGallery = (await fileInputsToDataUrls($("#bizGallery"))).map((file) => file.data);
+    const uploadedCover = (await fileInputsToDataUrls($("#bizCover")))[0];
     const proofOfId = (await fileInputsToDataUrls($("#bizProofId")))[0];
     const proofOfAddress = (await fileInputsToDataUrls($("#bizProofAddress")))[0];
     if (!isEditing && (!proofOfId || !proofOfAddress)) throw new Error("Please upload proof of ID and proof of address.");
@@ -896,6 +995,11 @@ $("#saveBusinessBtn").addEventListener("click", async () => {
     if (proofOfId) verificationDocuments.proofOfId = proofOfId;
     if (proofOfAddress) verificationDocuments.proofOfAddress = proofOfAddress;
     if (proofOfId || proofOfAddress) verificationDocuments.submittedAt = new Date().toISOString();
+    const projects = normalizeProjects(state.businessProjectsDraft).filter((project) => project.photos.length).map((project, index) => ({
+      name: project.name || `Project ${index + 1}`,
+      photos: project.photos.slice(0, MAX_PROJECT_PHOTOS)
+    })).slice(0, MAX_PROJECTS);
+    const gallery = projects.flatMap((project) => project.photos).slice(0, MAX_PROJECTS * MAX_PROJECT_PHOTOS);
     const payload = {
       name: $("#bizName").value,
       category: $("#bizCategory").value,
@@ -911,7 +1015,9 @@ $("#saveBusinessBtn").addEventListener("click", async () => {
       priceRange: $("#bizPrice").value,
       pricingMode: $("#bizPrice").value || "Request quote",
       logo: uploadedLogo?.data || state.businessLogoDraft || "",
-      gallery: [...state.businessGalleryDraft, ...uploadedGallery].slice(0, 12)
+      cover: uploadedCover?.data || state.businessCoverDraft || "",
+      projects,
+      gallery
     };
     if (Object.keys(verificationDocuments).length) payload.verificationDocuments = verificationDocuments;
     const { business } = await api(isEditing ? `/api/businesses/${state.editingBusinessId}` : "/api/businesses", {
@@ -1008,6 +1114,13 @@ $("#bizName").addEventListener("input", () => {
   if (!state.businessLogoDraft) renderBusinessLogoEditor();
 });
 
+document.addEventListener("input", (event) => {
+  if (event.target.classList.contains("project-name-input")) {
+    const project = state.businessProjectsDraft[Number(event.target.dataset.projectIndex)];
+    if (project) project.name = event.target.value;
+  }
+});
+
 $("#bizLogo").addEventListener("change", async () => {
   try {
     validateBusinessFiles();
@@ -1017,6 +1130,39 @@ $("#bizLogo").addEventListener("change", async () => {
   } catch (error) {
     $("#businessMessage").textContent = error.message;
     $("#bizLogo").value = "";
+  }
+});
+
+$("#bizCover").addEventListener("change", async () => {
+  try {
+    validateBusinessFiles();
+    const uploadedCover = (await fileInputsToDataUrls($("#bizCover")))[0];
+    if (uploadedCover?.data) state.businessCoverDraft = uploadedCover.data;
+    renderBusinessCoverEditor();
+  } catch (error) {
+    $("#businessMessage").textContent = error.message;
+    $("#bizCover").value = "";
+  }
+});
+
+document.addEventListener("change", async (event) => {
+  if (!event.target.classList.contains("project-photo-input")) return;
+  const projectIndex = Number(event.target.dataset.projectIndex);
+  const project = state.businessProjectsDraft[projectIndex];
+  if (!project) return;
+  try {
+    validateBusinessFiles();
+    const slotsAvailable = MAX_PROJECT_PHOTOS - project.photos.length;
+    if (slotsAvailable <= 0) throw new Error("This project already has the maximum of 5 photos.");
+    const selectedCount = event.target.files.length;
+    const uploadedPhotos = (await fileInputsToDataUrls(event.target)).map((file) => file.data).slice(0, slotsAvailable);
+    project.photos = [...project.photos, ...uploadedPhotos].slice(0, MAX_PROJECT_PHOTOS);
+    event.target.value = "";
+    renderProjectGalleryEditor();
+    if (uploadedPhotos.length < selectedCount) toast("Only 5 photos are allowed per project.");
+  } catch (error) {
+    $("#businessMessage").textContent = error.message;
+    event.target.value = "";
   }
 });
 

@@ -8,7 +8,7 @@
   <title>Connect-ZA | Connecting Professionals</title>
   <link rel="icon" href="/icons/icon.svg" type="image/svg+xml">
   <link rel="manifest" href="/manifest.webmanifest">
-  <link rel="stylesheet" href="/styles.css?v=profile-picture-1">
+  <link rel="stylesheet" href="/styles.css?v=profile-projects-1">
 </head>
 <body>
   <header class="app-header">
@@ -270,6 +270,12 @@
           <input id="bizLogo" type="file" accept="image/*">
           <small class="upload-note">This image appears as the business profile picture. Project photos stay separate in the gallery tab.</small>
         </fieldset>
+        <fieldset class="profile-picture-field">
+          <legend>Profile banner picture</legend>
+          <div id="businessCoverEditor" class="business-cover-editor"></div>
+          <input id="bizCover" type="file" accept="image/*">
+          <small class="upload-note">This wide banner appears at the top of the public business profile.</small>
+        </fieldset>
         <div class="business-form-grid">
           <input id="bizName" placeholder="Company name">
           <select id="bizCategory"></select>
@@ -298,8 +304,7 @@
       </div>
       <div id="businessPhotosPane" class="business-pane hidden">
         <div id="projectGalleryEditor" class="project-gallery-editor"></div>
-        <input id="bizGallery" type="file" multiple accept="image/*,video/*">
-        <small class="upload-note">Project uploads: max 8MB per file, 20MB total. New uploads are added to the photos shown above.</small>
+        <small class="upload-note">Create up to 3 projects. Each project can have up to 5 photos.</small>
       </div>
       <button id="saveBusinessBtn" type="button" class="primary-btn">Save profile</button>
       <p id="businessMessage" class="form-message"></p>
@@ -307,6 +312,6 @@
   </dialog>
 
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
-  <script src="/app.js?v=profile-picture-1"></script>
+  <script src="/app.js?v=profile-projects-1"></script>
 </body>
 </html>

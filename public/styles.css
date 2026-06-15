@@ -758,10 +758,35 @@ textarea {
   align-items: center;
 }
 
+.business-cover-editor {
+  display: grid;
+}
+
 .business-logo-preview {
   display: flex;
   align-items: center;
   gap: 10px;
+}
+
+.business-cover-preview {
+  position: relative;
+  overflow: hidden;
+  border: 1px solid color-mix(in srgb, var(--gold) 32%, transparent);
+  border-radius: 8px;
+  background: var(--surface);
+}
+
+.business-cover-preview img {
+  display: block;
+  width: 100%;
+  aspect-ratio: 3.2;
+  object-fit: cover;
+}
+
+.business-cover-preview .icon-btn {
+  position: absolute;
+  top: 8px;
+  right: 8px;
 }
 
 .business-logo-preview img {
@@ -779,6 +804,24 @@ textarea {
   align-items: center;
   gap: 4px 10px;
   color: var(--muted);
+}
+
+.business-cover-placeholder {
+  display: grid;
+  min-height: 82px;
+  place-items: center start;
+  gap: 4px;
+  padding: 12px;
+  border: 1px dashed color-mix(in srgb, var(--gold) 28%, transparent);
+  border-radius: 8px;
+  color: var(--muted);
+  background:
+    repeating-linear-gradient(135deg, color-mix(in srgb, var(--gold) 10%, transparent) 0 1px, transparent 1px 12px),
+    color-mix(in srgb, var(--surface) 70%, transparent);
+}
+
+.business-cover-placeholder strong {
+  color: var(--text);
 }
 
 .business-logo-placeholder span {
@@ -809,6 +852,24 @@ textarea {
 
 .profile-gallery h3 {
   margin: 0;
+}
+
+.project-gallery-groups,
+.profile-project-group {
+  display: grid;
+  gap: 10px;
+}
+
+.profile-project-group {
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--surface-strong) 40%, transparent);
+}
+
+.profile-project-group h4 {
+  margin: 0;
+  font-size: 0.92rem;
 }
 
 .profile-reviews {
@@ -1258,7 +1319,28 @@ footer {
 
 .project-gallery-editor {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.project-editor {
+  display: grid;
+  gap: 10px;
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--surface-strong) 46%, transparent);
+}
+
+.project-editor-head {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: center;
+}
+
+.project-photo-grid {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 8px;
 }
 
@@ -1286,6 +1368,20 @@ footer {
   min-height: 28px;
   background: rgba(0, 0, 0, 0.72);
   color: var(--text);
+}
+
+.project-upload {
+  display: grid;
+  gap: 6px;
+  padding: 9px;
+  border: 1px dashed color-mix(in srgb, var(--brand-2) 35%, transparent);
+  border-radius: 8px;
+  color: var(--muted);
+}
+
+.project-upload span {
+  color: var(--text);
+  font-weight: 800;
 }
 
 .empty-gallery-note {
@@ -1425,6 +1521,12 @@ footer {
   }
   .onboarding-strip, .business-grid, .review-row, .admin-dashboard, .business-form-grid, .gallery-grid, .verification-docs, .project-gallery-editor {
     grid-template-columns: 1fr;
+  }
+  .project-editor-head {
+    grid-template-columns: 1fr;
+  }
+  .project-photo-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
   .category-grid {
     grid-template-columns: repeat(3, minmax(0, 1fr));
