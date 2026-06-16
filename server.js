@@ -19,22 +19,30 @@ function loadEnvFile() {
 
 loadEnvFile();
 
+function cleanEnvValue(name, fallback = "") {
+  const raw = process.env[name] || fallback;
+  let value = String(raw || "").trim().replace(/^["']|["']$/g, "");
+  const prefix = `${name}=`;
+  if (value.startsWith(prefix)) value = value.slice(prefix.length).trim().replace(/^["']|["']$/g, "");
+  return value;
+}
+
 const PORT = Number(process.env.PORT || 3000);
 const DATA_DIR = path.join(__dirname, "data");
 const DB_FILE = path.join(DATA_DIR, "db.json");
 const PUBLIC_DIR = path.join(__dirname, "public");
 const MAX_BODY = 35 * 1024 * 1024;
 const MAX_BODY_MB = Math.floor(MAX_BODY / 1024 / 1024);
-const SUPABASE_URL = process.env.SUPABASE_URL || "";
-const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || "";
-const SUPABASE_DATABASE_URL = process.env.SUPABASE_DATABASE_URL || process.env.DATABASE_URL || "";
-const SUPABASE_STATE_TABLE = process.env.SUPABASE_STATE_TABLE || "connect_za_state";
-const SUPABASE_STATE_ID = process.env.SUPABASE_STATE_ID || "production";
-const SUPABASE_STORAGE_BUCKET = process.env.SUPABASE_STORAGE_BUCKET || "connect-za-media";
-const SUPABASE_PRIVATE_STORAGE_BUCKET = process.env.SUPABASE_PRIVATE_STORAGE_BUCKET || "connect-za-private";
-const YOCO_SECRET_KEY = process.env.YOCO_SECRET_KEY || "";
-const YOCO_WEBHOOK_SECRET = process.env.YOCO_WEBHOOK_SECRET || "";
-const YOCO_CURRENCY = process.env.YOCO_CURRENCY || "ZAR";
+const SUPABASE_URL = cleanEnvValue("SUPABASE_URL");
+const SUPABASE_SERVICE_ROLE_KEY = cleanEnvValue("SUPABASE_SERVICE_ROLE_KEY");
+const SUPABASE_DATABASE_URL = cleanEnvValue("SUPABASE_DATABASE_URL", process.env.DATABASE_URL || "");
+const SUPABASE_STATE_TABLE = cleanEnvValue("SUPABASE_STATE_TABLE", "connect_za_state");
+const SUPABASE_STATE_ID = cleanEnvValue("SUPABASE_STATE_ID", "production");
+const SUPABASE_STORAGE_BUCKET = cleanEnvValue("SUPABASE_STORAGE_BUCKET", "connect-za-media");
+const SUPABASE_PRIVATE_STORAGE_BUCKET = cleanEnvValue("SUPABASE_PRIVATE_STORAGE_BUCKET", "connect-za-private");
+const YOCO_SECRET_KEY = cleanEnvValue("YOCO_SECRET_KEY");
+const YOCO_WEBHOOK_SECRET = cleanEnvValue("YOCO_WEBHOOK_SECRET");
+const YOCO_CURRENCY = cleanEnvValue("YOCO_CURRENCY", "ZAR");
 const YOCO_API_BASE = "https://payments.yoco.com/api";
 function configured(value, placeholders) {
   return Boolean(value && !placeholders.some((placeholder) => value.includes(placeholder)));
@@ -280,7 +288,8 @@ function amountToCents(amount) {
 }
 
 function yocoConfigured() {
-  return configured(YOCO_SECRET_KEY, ["your-yoco-secret-key", "sk_test_xxx", "sk_live_xxx"]);
+  return configured(YOCO_SECRET_KEY, ["your-yoco-secret-key", "sk_test_xxx", "sk_live_xxx"])
+    && /^sk_(test|live)_/.test(YOCO_SECRET_KEY);
 }
 
 function yocoWebhookConfigured() {
@@ -310,7 +319,7 @@ function paymentReference() {
 
 async function yocoRequest(method, endpoint, body, idempotencyKey = "") {
   if (!yocoConfigured()) {
-    const error = new Error("Yoco is not configured yet. Add YOCO_SECRET_KEY in Render environment variables.");
+    const error = new Error("Yoco is not configured correctly. In Render, set YOCO_SECRET_KEY to the Yoco secret key that starts with sk_test_ or sk_live_. Do not use the webhook secret, public key, or include YOCO_SECRET_KEY= in the value.");
     error.statusCode = 503;
     throw error;
   }
@@ -325,9 +334,17 @@ async function yocoRequest(method, endpoint, body, idempotencyKey = "") {
     body: body ? JSON.stringify(body) : undefined
   });
   const text = await response.text();
-  const payload = text ? JSON.parse(text) : {};
+  let payload = {};
+  try {
+    payload = text ? JSON.parse(text) : {};
+  } catch {
+    payload = { message: text };
+  }
   if (!response.ok) {
-    const message = payload.message || payload.error || payload.detail || `Yoco ${method} ${endpoint} failed.`;
+    let message = payload.message || payload.error || payload.detail || `Yoco ${method} ${endpoint} failed.`;
+    if (response.status === 401 || response.status === 403 || /^forbidden$/i.test(String(message))) {
+      message = "Yoco rejected the checkout request. Check Render YOCO_SECRET_KEY: it must be the Yoco Checkout secret key from the Yoco App, starting with sk_test_ for testing or sk_live_ for production. Do not use YOCO_WEBHOOK_SECRET or paste quotes around the key.";
+    }
     const error = new Error(message);
     error.statusCode = response.status >= 400 ? response.status : 502;
     throw error;
@@ -1001,6 +1018,16 @@ function storageStatus() {
   };
 }
 
+function paymentStatus() {
+  return {
+    provider: "yoco",
+    checkoutConfigured: yocoConfigured(),
+    keyMode: YOCO_SECRET_KEY.startsWith("sk_live_") ? "live" : YOCO_SECRET_KEY.startsWith("sk_test_") ? "test" : "invalid-or-missing",
+    webhookConfigured: yocoWebhookConfigured(),
+    currency: YOCO_CURRENCY
+  };
+}
+
 function publicUser(user) {
   if (!user) return null;
   const { passwordHash, ...safe } = user;
@@ -1205,7 +1232,7 @@ async function api(req, res, pathname, query) {
     if (supabaseStorageConfigured()) {
       await ensureSupabaseStorageBuckets().catch(() => {});
     }
-    return sendJson(res, { categories, provinces, cities, settings: db.settings, databaseProvider: databaseProvider(), databaseStatus: databaseStatus(), storageStatus: storageStatus() });
+    return sendJson(res, { categories, provinces, cities, settings: db.settings, databaseProvider: databaseProvider(), databaseStatus: databaseStatus(), storageStatus: storageStatus(), paymentStatus: paymentStatus() });
   }
 
   if (req.method === "POST" && pathname === "/api/auth/register") {

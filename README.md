@@ -89,6 +89,7 @@ YOCO_CURRENCY=ZAR
 ```
 
 Use `sk_test_...` while testing, then switch to `sk_live_...` for production.
+In Render, the key name is `YOCO_SECRET_KEY` and the value must be only the secret key. Do not paste `YOCO_SECRET_KEY=` into the value, do not use the webhook secret, and do not wrap the key in quotes.
 
 3. Register one Yoco Checkout webhook pointing to:
 
