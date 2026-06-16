@@ -60,7 +60,7 @@ You can also connect through Supabase REST instead by setting `SUPABASE_URL` and
 
 Business logos, banner images, project galleries, quote files, and verification documents are uploaded to Supabase Storage before the business or quote record is saved.
 
-Create two buckets by running `supabase/storage.sql`:
+The app can create/update the buckets automatically when `/api/meta` is called, or you can create them manually by running `supabase/storage.sql`:
 
 ```text
 connect-za-media    public bucket for profile, banner, and project images

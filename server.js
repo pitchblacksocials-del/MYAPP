@@ -58,6 +58,9 @@ const pgPool = USE_SUPABASE_POSTGRES
   : null;
 let pgReady = false;
 let databaseFallbackReason = "";
+let storageBucketsReady = false;
+let storageBucketsReadyPromise = null;
+let storageBucketsError = "";
 const SUBSCRIPTION_PLANS = {
   standard: { label: "Standard", amount: 150 },
   prime: { label: "PRIME", amount: 250 }
@@ -753,6 +756,75 @@ function supabaseStorageConfigured() {
   return configured(SUPABASE_URL, ["your-project-ref"]) && configured(SUPABASE_SERVICE_ROLE_KEY, ["your-service-role-key"]);
 }
 
+async function supabaseStorageRequest(method, endpoint, body) {
+  const response = await fetch(`${SUPABASE_URL.replace(/\/$/, "")}/storage/v1${endpoint}`, {
+    method,
+    headers: {
+      apikey: SUPABASE_SERVICE_ROLE_KEY,
+      Authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
+      "Content-Type": "application/json"
+    },
+    body: body ? JSON.stringify(body) : undefined
+  });
+  const text = await response.text();
+  let data = {};
+  try {
+    data = text ? JSON.parse(text) : {};
+  } catch {
+    data = { message: text };
+  }
+  if (!response.ok) {
+    const detail = data?.message || data?.error || text || response.statusText;
+    const error = new Error(`Supabase Storage ${method} ${endpoint} failed: ${detail}`);
+    error.statusCode = response.status;
+    throw error;
+  }
+  return data;
+}
+
+async function ensureSupabaseBucket(id, isPublic) {
+  const payload = {
+    id,
+    name: id,
+    public: Boolean(isPublic),
+    file_size_limit: 10 * 1024 * 1024
+  };
+  try {
+    await supabaseStorageRequest("GET", `/bucket/${encodeURIComponent(id)}`);
+    await supabaseStorageRequest("PUT", `/bucket/${encodeURIComponent(id)}`, {
+      public: payload.public,
+      file_size_limit: payload.file_size_limit
+    });
+  } catch (error) {
+    if (error.statusCode !== 404) throw error;
+    await supabaseStorageRequest("POST", "/bucket", payload);
+  }
+}
+
+async function ensureSupabaseStorageBuckets() {
+  if (!supabaseStorageConfigured()) {
+    storageBucketsReady = false;
+    storageBucketsError = "Supabase Storage is not configured.";
+    return;
+  }
+  if (storageBucketsReady) return;
+  if (storageBucketsReadyPromise) return storageBucketsReadyPromise;
+  storageBucketsReadyPromise = (async () => {
+    await ensureSupabaseBucket(SUPABASE_STORAGE_BUCKET, true);
+    await ensureSupabaseBucket(SUPABASE_PRIVATE_STORAGE_BUCKET, false);
+    storageBucketsReady = true;
+    storageBucketsError = "";
+  })();
+  try {
+    await storageBucketsReadyPromise;
+  } catch (error) {
+    storageBucketsReadyPromise = null;
+    storageBucketsReady = false;
+    storageBucketsError = error.message;
+    throw error;
+  }
+}
+
 function isDataUrl(value) {
   return typeof value === "string" && /^data:[^;,]+\/?[^;,]*;base64,/i.test(value);
 }
@@ -803,6 +875,7 @@ async function uploadSupabaseObject({ bucket, storagePath, buffer, contentType }
     error.statusCode = 503;
     throw error;
   }
+  await ensureSupabaseStorageBuckets();
   const encodedPath = encodeStoragePath(storagePath);
   const endpoint = `${SUPABASE_URL.replace(/\/$/, "")}/storage/v1/object/${encodeURIComponent(bucket)}/${encodedPath}`;
   const response = await fetch(endpoint, {
@@ -1044,6 +1117,8 @@ function storageStatus() {
     provider: supabaseStorageConfigured() ? "supabase-storage" : "not-configured",
     publicBucket: SUPABASE_STORAGE_BUCKET,
     privateBucket: SUPABASE_PRIVATE_STORAGE_BUCKET,
+    bucketsReady: storageBucketsReady,
+    bucketError: storageBucketsError,
     inlineFallbackAllowed: ALLOW_INLINE_UPLOAD_FALLBACK
   };
 }
@@ -1249,6 +1324,9 @@ async function api(req, res, pathname, query) {
   const db = await readDb();
 
   if (req.method === "GET" && pathname === "/api/meta") {
+    if (supabaseStorageConfigured()) {
+      await ensureSupabaseStorageBuckets().catch(() => {});
+    }
     return sendJson(res, { categories, provinces, cities, settings: db.settings, databaseProvider: databaseProvider(), databaseStatus: databaseStatus(), storageStatus: storageStatus() });
   }
 
