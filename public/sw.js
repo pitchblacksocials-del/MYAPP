@@ -1,5 +1,5 @@
-const CACHE = "connect-za-v32-yoco-default";
-const ASSETS = ["/", "/styles.css?v=yoco-default-1", "/app.js?v=yoco-default-1", "/legal.html", "/manifest.webmanifest", "/icons/icon.svg", "/icons/connect-za-logo.svg"];
+const CACHE = "connect-za-v33-yoco-only";
+const ASSETS = ["/", "/styles.css?v=yoco-only-1", "/app.js?v=yoco-only-1", "/legal.html", "/manifest.webmanifest", "/icons/icon.svg", "/icons/connect-za-logo.svg"];
 
 self.addEventListener("install", (event) => {
   event.waitUntil(caches.open(CACHE).then((cache) => cache.addAll(ASSETS)));

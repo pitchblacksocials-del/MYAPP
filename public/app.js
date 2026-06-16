@@ -152,9 +152,7 @@ async function boot() {
   try {
     state.meta = await api("/api/meta");
     const gatewaySelect = $("#primeGateway");
-    if (gatewaySelect && Array.from(gatewaySelect.options).some((option) => option.value === "Yoco")) {
-      gatewaySelect.value = "Yoco";
-    }
+    if (gatewaySelect) gatewaySelect.value = "Yoco";
     fillSelect($("#provinceFilter"), state.meta.provinces, "All provinces");
     fillSelect($("#heroCityFilter"), state.meta.cities, "All cities/towns");
     fillSelect($("#cityFilter"), state.meta.cities, "All South African cities/towns");
@@ -1096,7 +1094,7 @@ $("#startSubscription").addEventListener("click", async () => {
     const own = state.myBusinesses.find((biz) => biz.id === $("#primeBusinessSelect").value) || state.myBusinesses[0];
     if (!own) throw new Error("Create a business profile before starting a subscription.");
     const plan = $("#subscriptionPlan").value;
-    const gateway = $("#primeGateway")?.value || "Yoco";
+    const gateway = "Yoco";
     const { redirectUrl, gateway: checkoutGateway, planLabel } = await api("/api/payments/subscription", {
       method: "POST",
       body: JSON.stringify({ businessId: own.id, plan, gateway, autoRenew: $("#primeRenew").checked })

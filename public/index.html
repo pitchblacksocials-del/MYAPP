@@ -8,7 +8,7 @@
   <title>Connect-ZA | Connecting Professionals</title>
   <link rel="icon" href="/icons/icon.svg" type="image/svg+xml">
   <link rel="manifest" href="/manifest.webmanifest">
-  <link rel="stylesheet" href="/styles.css?v=yoco-default-1">
+  <link rel="stylesheet" href="/styles.css?v=yoco-only-1">
 </head>
 <body>
   <header class="app-header">
@@ -126,13 +126,8 @@
           <option value="standard">Standard - R150/month</option>
           <option value="prime">PRIME - R250/month</option>
         </select>
-        <select id="primeGateway" aria-label="Payment gateway">
-          <option selected>Yoco</option>
-          <option>Paystack</option>
-          <option>Stripe</option>
-          <option>PayFast</option>
-          <option>Ozow</option>
-        </select>
+        <input id="primeGateway" type="hidden" value="Yoco">
+        <div class="gateway-lock" aria-label="Payment gateway">Yoco secure checkout</div>
         <label class="toggle-row"><input id="primeRenew" type="checkbox" checked> Auto-renew</label>
         <button id="startSubscription" class="primary-btn">Start Standard</button>
         <p id="primeStatusText" class="prime-status-text">Business owners can activate Standard for R150/month or PRIME for R250/month.</p>
@@ -312,6 +307,6 @@
   </dialog>
 
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
-  <script src="/app.js?v=yoco-default-1"></script>
+  <script src="/app.js?v=yoco-only-1"></script>
 </body>
 </html>
