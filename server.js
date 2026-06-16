@@ -1572,7 +1572,7 @@ async function api(req, res, pathname, query) {
     if (business.subscriptionPlan === plan && business.subscriptionStatus === "active") {
       return sendJson(res, { error: `${subscriptionPlanLabel(plan)} is already active for this business.` }, 400);
     }
-    const gateway = ["Paystack", "PayFast", "Ozow", "Yoco", "Stripe"].includes(body.gateway) ? body.gateway : "Paystack";
+    const gateway = ["Paystack", "PayFast", "Ozow", "Yoco", "Stripe"].includes(body.gateway) ? body.gateway : "Yoco";
     let gatewayCheckout = null;
     if (gateway === "Paystack") {
       const checkout = await initializePaystackCheckout(req, user, business, plan, body.autoRenew);
