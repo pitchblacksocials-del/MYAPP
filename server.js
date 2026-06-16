@@ -796,7 +796,8 @@ async function ensureSupabaseBucket(id, isPublic) {
       file_size_limit: payload.file_size_limit
     });
   } catch (error) {
-    if (error.statusCode !== 404) throw error;
+    const bucketMissing = error.statusCode === 404 || /bucket not found|not found/i.test(error.message);
+    if (!bucketMissing) throw error;
     await supabaseStorageRequest("POST", "/bucket", payload);
   }
 }
