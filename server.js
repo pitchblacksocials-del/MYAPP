@@ -45,6 +45,7 @@ const USE_SUPABASE_REST = !USE_SUPABASE_POSTGRES
   && configured(SUPABASE_URL, ["your-project-ref"])
   && configured(SUPABASE_SERVICE_ROLE_KEY, ["your-service-role-key"]);
 const USE_SUPABASE = USE_SUPABASE_POSTGRES || USE_SUPABASE_REST;
+const ALLOW_LOCAL_DB_FALLBACK = process.env.ALLOW_LOCAL_DB_FALLBACK === "true";
 const pgPool = USE_SUPABASE_POSTGRES
   ? new Pool({
       connectionString: SUPABASE_DATABASE_URL,
@@ -764,7 +765,7 @@ async function readDb() {
       databaseFallbackReason = error.message;
     }
   }
-  if (USE_SUPABASE) {
+  if (USE_SUPABASE_REST) {
     try {
       const rows = await supabaseRequest("GET", `?id=eq.${encodeURIComponent(SUPABASE_STATE_ID)}&select=data`, null);
       databaseFallbackReason = "";
@@ -780,6 +781,11 @@ async function readDb() {
     } catch (error) {
       databaseFallbackReason = error.message;
     }
+  }
+  if (USE_SUPABASE && !ALLOW_LOCAL_DB_FALLBACK) {
+    const error = new Error(`Database connection failed: ${databaseFallbackReason || "Supabase is not available"}. Fix the Supabase environment variables before accepting registrations.`);
+    error.statusCode = 503;
+    throw error;
   }
   ensureDb();
   const db = JSON.parse(fs.readFileSync(DB_FILE, "utf8"));
@@ -806,7 +812,7 @@ async function writeDb(db) {
       databaseFallbackReason = error.message;
     }
   }
-  if (USE_SUPABASE) {
+  if (USE_SUPABASE_REST) {
     try {
       await supabaseRequest("POST", "?on_conflict=id", {
         id: SUPABASE_STATE_ID,
@@ -818,6 +824,11 @@ async function writeDb(db) {
     } catch (error) {
       databaseFallbackReason = error.message;
     }
+  }
+  if (USE_SUPABASE && !ALLOW_LOCAL_DB_FALLBACK) {
+    const error = new Error(`Database write failed: ${databaseFallbackReason || "Supabase is not available"}. Nothing was saved to temporary Render storage.`);
+    error.statusCode = 503;
+    throw error;
   }
   ensureDb();
   fs.writeFileSync(DB_FILE, JSON.stringify(db, null, 2));
@@ -833,7 +844,8 @@ function databaseProvider() {
 function databaseStatus() {
   return {
     configuredProvider: USE_SUPABASE_POSTGRES ? "supabase-postgres" : USE_SUPABASE_REST ? "supabase-rest" : "local-json",
-    fallbackReason: databaseFallbackReason
+    fallbackReason: databaseFallbackReason,
+    localFallbackAllowed: ALLOW_LOCAL_DB_FALLBACK
   };
 }
 

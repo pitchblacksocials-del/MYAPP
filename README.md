@@ -42,9 +42,11 @@ SUPABASE_DATABASE_URL=postgresql://postgres:[YOUR-PASSWORD]@db.cqwutrzqaijbgllrg
 npm start
 ```
 
-Replace `[YOUR-PASSWORD]` with the database password from Supabase. If the password contains special characters, URL-encode it first. The app reports the active storage provider from `/api/meta` as `supabase-postgres` when the direct connection is configured. If credentials are missing, it safely falls back to `data/db.json`.
+Replace `[YOUR-PASSWORD]` with the database password from Supabase. If the password contains special characters, URL-encode it first. The app reports the active storage provider from `/api/meta` as `supabase-postgres` when the database connection is working. If credentials are missing locally, it can fall back to `data/db.json`.
 
-On Render, use Supabase's transaction pooler URL for `SUPABASE_DATABASE_URL`.
+On Render, use Supabase's transaction or session pooler URL for `SUPABASE_DATABASE_URL`. Render does not support Supabase's IPv6-only direct database endpoint, so the direct `db.[project].supabase.co:5432` URL can fail on Render. If your database password contains special characters such as `@`, URL-encode them before saving the connection string in Render.
+
+Do not enable `ALLOW_LOCAL_DB_FALLBACK` on Render. If Supabase is configured but unreachable, the app should fail loudly instead of saving new users or businesses to Render's temporary filesystem.
 
 You can also connect through Supabase REST instead by setting `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY`.
 
