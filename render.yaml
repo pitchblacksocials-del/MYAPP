@@ -8,10 +8,20 @@ services:
     envVars:
       - key: SUPABASE_DATABASE_URL
         sync: false
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
       - key: SUPABASE_STATE_TABLE
         value: connect_za_state
       - key: SUPABASE_STATE_ID
         value: production
+      - key: SUPABASE_STORAGE_BUCKET
+        value: connect-za-media
+      - key: SUPABASE_PRIVATE_STORAGE_BUCKET
+        value: connect-za-private
+      - key: REQUIRE_SUPABASE_DATABASE
+        value: "true"
       - key: ADMIN_EMAIL
         sync: false
       - key: ADMIN_PASSWORD

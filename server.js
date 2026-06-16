@@ -30,6 +30,8 @@ const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || "";
 const SUPABASE_DATABASE_URL = process.env.SUPABASE_DATABASE_URL || process.env.DATABASE_URL || "";
 const SUPABASE_STATE_TABLE = process.env.SUPABASE_STATE_TABLE || "connect_za_state";
 const SUPABASE_STATE_ID = process.env.SUPABASE_STATE_ID || "production";
+const SUPABASE_STORAGE_BUCKET = process.env.SUPABASE_STORAGE_BUCKET || "connect-za-media";
+const SUPABASE_PRIVATE_STORAGE_BUCKET = process.env.SUPABASE_PRIVATE_STORAGE_BUCKET || "connect-za-private";
 const PAYSTACK_SECRET_KEY = process.env.PAYSTACK_SECRET_KEY || "";
 const PAYSTACK_CURRENCY = process.env.PAYSTACK_CURRENCY || "ZAR";
 const YOCO_SECRET_KEY = process.env.YOCO_SECRET_KEY || "";
@@ -45,7 +47,9 @@ const USE_SUPABASE_REST = !USE_SUPABASE_POSTGRES
   && configured(SUPABASE_URL, ["your-project-ref"])
   && configured(SUPABASE_SERVICE_ROLE_KEY, ["your-service-role-key"]);
 const USE_SUPABASE = USE_SUPABASE_POSTGRES || USE_SUPABASE_REST;
+const REQUIRE_SUPABASE_DATABASE = process.env.REQUIRE_SUPABASE_DATABASE === "true";
 const ALLOW_LOCAL_DB_FALLBACK = process.env.ALLOW_LOCAL_DB_FALLBACK === "true";
+const ALLOW_INLINE_UPLOAD_FALLBACK = process.env.ALLOW_INLINE_UPLOAD_FALLBACK === "true";
 const pgPool = USE_SUPABASE_POSTGRES
   ? new Pool({
       connectionString: SUPABASE_DATABASE_URL,
@@ -745,6 +749,181 @@ async function supabaseRequest(method, query, body) {
   return data;
 }
 
+function supabaseStorageConfigured() {
+  return configured(SUPABASE_URL, ["your-project-ref"]) && configured(SUPABASE_SERVICE_ROLE_KEY, ["your-service-role-key"]);
+}
+
+function isDataUrl(value) {
+  return typeof value === "string" && /^data:[^;,]+\/?[^;,]*;base64,/i.test(value);
+}
+
+function parseDataUrl(dataUrl, fallbackName = "upload") {
+  const match = String(dataUrl || "").match(/^data:([^;,]+);base64,(.+)$/);
+  if (!match) return null;
+  const contentType = match[1] || "application/octet-stream";
+  return {
+    contentType,
+    buffer: Buffer.from(match[2], "base64"),
+    name: fallbackName
+  };
+}
+
+function extensionForMime(contentType, fallbackName = "") {
+  const fromName = String(fallbackName || "").match(/\.([A-Za-z0-9]{2,8})$/)?.[1];
+  if (fromName) return fromName.toLowerCase();
+  const map = {
+    "image/jpeg": "jpg",
+    "image/png": "png",
+    "image/webp": "webp",
+    "image/gif": "gif",
+    "application/pdf": "pdf",
+    "video/mp4": "mp4",
+    "audio/mpeg": "mp3",
+    "audio/webm": "webm"
+  };
+  return map[String(contentType || "").toLowerCase()] || "bin";
+}
+
+function cleanStorageSegment(value, fallback = "file") {
+  return String(value || fallback)
+    .toLowerCase()
+    .replace(/[^a-z0-9._-]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 80) || fallback;
+}
+
+function encodeStoragePath(storagePath) {
+  return String(storagePath).split("/").map(encodeURIComponent).join("/");
+}
+
+async function uploadSupabaseObject({ bucket, storagePath, buffer, contentType }) {
+  if (!supabaseStorageConfigured()) {
+    if (ALLOW_INLINE_UPLOAD_FALLBACK) return null;
+    const error = new Error("Supabase Storage is not configured. Add SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY in Render before uploading files.");
+    error.statusCode = 503;
+    throw error;
+  }
+  const encodedPath = encodeStoragePath(storagePath);
+  const endpoint = `${SUPABASE_URL.replace(/\/$/, "")}/storage/v1/object/${encodeURIComponent(bucket)}/${encodedPath}`;
+  const response = await fetch(endpoint, {
+    method: "POST",
+    headers: {
+      apikey: SUPABASE_SERVICE_ROLE_KEY,
+      Authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
+      "Content-Type": contentType || "application/octet-stream",
+      "Cache-Control": "3600",
+      "x-upsert": "true"
+    },
+    body: buffer
+  });
+  const text = await response.text();
+  let data = {};
+  try {
+    data = text ? JSON.parse(text) : {};
+  } catch {
+    data = { message: text };
+  }
+  if (!response.ok) {
+    const detail = data?.message || data?.error || text || response.statusText;
+    const error = new Error(`Supabase Storage upload failed: ${detail}`);
+    error.statusCode = response.status >= 400 ? response.status : 502;
+    throw error;
+  }
+  return {
+    bucket,
+    path: storagePath,
+    publicUrl: `${SUPABASE_URL.replace(/\/$/, "")}/storage/v1/object/public/${encodeURIComponent(bucket)}/${encodedPath}`
+  };
+}
+
+async function uploadPublicDataAsset(value, businessId, folder, fallbackName) {
+  if (!value || (typeof value === "string" && !isDataUrl(value))) return value || "";
+  const file = typeof value === "object" ? value : { data: value, name: fallbackName };
+  if (!isDataUrl(file.data)) return file.url || file.publicUrl || file.path || "";
+  const parsed = parseDataUrl(file.data, file.name || fallbackName);
+  if (!parsed) return "";
+  const ext = extensionForMime(file.type || parsed.contentType, file.name);
+  const storagePath = [
+    "businesses",
+    cleanStorageSegment(businessId, "business"),
+    cleanStorageSegment(folder, "media"),
+    `${Date.now()}-${crypto.randomBytes(5).toString("hex")}.${ext}`
+  ].join("/");
+  const uploaded = await uploadSupabaseObject({
+    bucket: SUPABASE_STORAGE_BUCKET,
+    storagePath,
+    buffer: parsed.buffer,
+    contentType: file.type || parsed.contentType
+  });
+  return uploaded?.publicUrl || file.data;
+}
+
+async function uploadPrivateDataAsset(value, businessId, folder, fallbackName) {
+  if (!value || (typeof value === "object" && value.path && value.bucket)) return value || null;
+  const file = typeof value === "object" ? value : { data: value, name: fallbackName };
+  if (!isDataUrl(file.data)) return file || null;
+  const parsed = parseDataUrl(file.data, file.name || fallbackName);
+  if (!parsed) return null;
+  const ext = extensionForMime(file.type || parsed.contentType, file.name);
+  const storagePath = [
+    "businesses",
+    cleanStorageSegment(businessId, "business"),
+    cleanStorageSegment(folder, "private"),
+    `${Date.now()}-${crypto.randomBytes(5).toString("hex")}.${ext}`
+  ].join("/");
+  const uploaded = await uploadSupabaseObject({
+    bucket: SUPABASE_PRIVATE_STORAGE_BUCKET,
+    storagePath,
+    buffer: parsed.buffer,
+    contentType: file.type || parsed.contentType
+  });
+  if (!uploaded) return file;
+  return {
+    name: file.name || fallbackName,
+    type: file.type || parsed.contentType,
+    size: parsed.buffer.length,
+    bucket: uploaded.bucket,
+    path: uploaded.path,
+    uploadedAt: new Date().toISOString()
+  };
+}
+
+async function prepareBusinessUploads(input, businessId) {
+  const prepared = { ...input };
+  prepared.logo = await uploadPublicDataAsset(prepared.logo, businessId, "profile", "logo");
+  prepared.cover = await uploadPublicDataAsset(prepared.cover, businessId, "banner", "banner");
+  const projects = normalizeBusinessProjects(prepared.projects, prepared.gallery);
+  prepared.projects = [];
+  for (let projectIndex = 0; projectIndex < projects.length; projectIndex += 1) {
+    const project = projects[projectIndex];
+    const photos = [];
+    for (let photoIndex = 0; photoIndex < project.photos.length; photoIndex += 1) {
+      photos.push(await uploadPublicDataAsset(project.photos[photoIndex], businessId, `projects/project-${projectIndex + 1}`, `photo-${photoIndex + 1}`));
+    }
+    prepared.projects.push({ name: project.name, photos: photos.filter(Boolean).slice(0, MAX_PROJECT_PHOTOS) });
+  }
+  prepared.gallery = flattenBusinessProjects(prepared.projects);
+  if (prepared.verificationDocuments) {
+    prepared.verificationDocuments = {
+      ...prepared.verificationDocuments,
+      proofOfId: await uploadPrivateDataAsset(prepared.verificationDocuments.proofOfId, businessId, "verification", "proof-of-id"),
+      proofOfAddress: await uploadPrivateDataAsset(prepared.verificationDocuments.proofOfAddress, businessId, "verification", "proof-of-address"),
+      submittedAt: prepared.verificationDocuments.submittedAt || new Date().toISOString()
+    };
+  }
+  return prepared;
+}
+
+async function prepareQuoteFiles(files, quoteId, businessId) {
+  if (!Array.isArray(files)) return [];
+  const uploaded = [];
+  for (let index = 0; index < files.slice(0, 6).length; index += 1) {
+    const file = files[index];
+    uploaded.push(await uploadPrivateDataAsset(file, businessId || quoteId, `quotes/${quoteId}`, file?.name || `quote-file-${index + 1}`));
+  }
+  return uploaded.filter(Boolean);
+}
+
 async function readDb() {
   if (USE_SUPABASE_POSTGRES) {
     try {
@@ -784,6 +963,11 @@ async function readDb() {
   }
   if (USE_SUPABASE && !ALLOW_LOCAL_DB_FALLBACK) {
     const error = new Error(`Database connection failed: ${databaseFallbackReason || "Supabase is not available"}. Fix the Supabase environment variables before accepting registrations.`);
+    error.statusCode = 503;
+    throw error;
+  }
+  if (REQUIRE_SUPABASE_DATABASE) {
+    const error = new Error("Supabase database is required in this environment. Add SUPABASE_DATABASE_URL or Supabase REST credentials before accepting registrations.");
     error.statusCode = 503;
     throw error;
   }
@@ -830,6 +1014,11 @@ async function writeDb(db) {
     error.statusCode = 503;
     throw error;
   }
+  if (REQUIRE_SUPABASE_DATABASE) {
+    const error = new Error("Supabase database is required in this environment. Nothing was saved to local storage.");
+    error.statusCode = 503;
+    throw error;
+  }
   ensureDb();
   fs.writeFileSync(DB_FILE, JSON.stringify(db, null, 2));
 }
@@ -845,7 +1034,17 @@ function databaseStatus() {
   return {
     configuredProvider: USE_SUPABASE_POSTGRES ? "supabase-postgres" : USE_SUPABASE_REST ? "supabase-rest" : "local-json",
     fallbackReason: databaseFallbackReason,
+    supabaseRequired: REQUIRE_SUPABASE_DATABASE,
     localFallbackAllowed: ALLOW_LOCAL_DB_FALLBACK
+  };
+}
+
+function storageStatus() {
+  return {
+    provider: supabaseStorageConfigured() ? "supabase-storage" : "not-configured",
+    publicBucket: SUPABASE_STORAGE_BUCKET,
+    privateBucket: SUPABASE_PRIVATE_STORAGE_BUCKET,
+    inlineFallbackAllowed: ALLOW_INLINE_UPLOAD_FALLBACK
   };
 }
 
@@ -1050,7 +1249,7 @@ async function api(req, res, pathname, query) {
   const db = await readDb();
 
   if (req.method === "GET" && pathname === "/api/meta") {
-    return sendJson(res, { categories, provinces, cities, settings: db.settings, databaseProvider: databaseProvider(), databaseStatus: databaseStatus() });
+    return sendJson(res, { categories, provinces, cities, settings: db.settings, databaseProvider: databaseProvider(), databaseStatus: databaseStatus(), storageStatus: storageStatus() });
   }
 
   if (req.method === "POST" && pathname === "/api/auth/register") {
@@ -1146,7 +1345,7 @@ async function api(req, res, pathname, query) {
     if (!user) return;
     const business = db.businesses.find((biz) => biz.id === businessMatch[1] && biz.ownerId === user.id);
     if (!business) return sendJson(res, { error: "Business not found." }, 404);
-    const body = await readBody(req);
+    const body = await prepareBusinessUploads(await readBody(req), business.id);
     if (!canonicalFromList(body.province || business.province, provinces)) return sendJson(res, { error: "Please select one of South Africa's nine provinces." }, 400);
     if (!canonicalFromList(body.city || business.city, cities)) return sendJson(res, { error: "Please select a South African city or town from the list." }, 400);
     updateBusinessProfile(business, body);
@@ -1163,7 +1362,9 @@ async function api(req, res, pathname, query) {
     if (!canonicalFromList(body.province, provinces)) return sendJson(res, { error: "Please select one of South Africa's nine provinces." }, 400);
     if (!canonicalFromList(body.city, cities)) return sendJson(res, { error: "Please select a South African city or town from the list." }, 400);
     if (!body.verificationDocuments?.proofOfId || !body.verificationDocuments?.proofOfAddress) return sendJson(res, { error: "Proof of ID and proof of address are required." }, 400);
-    const business = { id: uid("biz"), ...sanitizeBusiness(body, user.id) };
+    const businessId = uid("biz");
+    const preparedBody = await prepareBusinessUploads(body, businessId);
+    const business = { id: businessId, ...sanitizeBusiness(preparedBody, user.id) };
     db.businesses.push(business);
     db.notifications.push({ id: uid("not"), type: "business_pending", text: `${business.name} needs approval`, createdAt: new Date().toISOString(), read: false });
     await writeDb(db);
@@ -1188,14 +1389,15 @@ async function api(req, res, pathname, query) {
     const body = await readBody(req);
     const business = db.businesses.find((biz) => biz.id === body.businessId);
     if (!business) return sendJson(res, { error: "Business not found." }, 404);
+    const quoteId = uid("quo");
     const quote = {
-      id: uid("quo"),
+      id: quoteId,
       customerId: user.id,
       businessId: business.id,
       title: String(body.title || "Quote request"),
       details: String(body.details || ""),
       budget: String(body.budget || ""),
-      files: Array.isArray(body.files) ? body.files : [],
+      files: await prepareQuoteFiles(body.files, quoteId, business.id),
       status: "sent",
       responses: [],
       createdAt: new Date().toISOString()

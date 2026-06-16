@@ -24,7 +24,7 @@ Customers and businesses can register through the live app.
 ## Connect Supabase
 
 1. Create a Supabase project.
-2. Open the Supabase SQL editor and run `supabase/schema.sql`.
+2. Open the Supabase SQL editor and run `supabase/schema.sql`, then run `supabase/storage.sql`.
 3. Create `.env` from `.env.example`.
 4. Add your direct Supabase PostgreSQL URL:
 
@@ -48,7 +48,35 @@ On Render, use Supabase's transaction or session pooler URL for `SUPABASE_DATABA
 
 Do not enable `ALLOW_LOCAL_DB_FALLBACK` on Render. If Supabase is configured but unreachable, the app should fail loudly instead of saving new users or businesses to Render's temporary filesystem.
 
+Set this on Render so the app never uses local JSON storage in production:
+
+```env
+REQUIRE_SUPABASE_DATABASE=true
+```
+
 You can also connect through Supabase REST instead by setting `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY`.
+
+## Connect Supabase Storage
+
+Business logos, banner images, project galleries, quote files, and verification documents are uploaded to Supabase Storage before the business or quote record is saved.
+
+Create two buckets by running `supabase/storage.sql`:
+
+```text
+connect-za-media    public bucket for profile, banner, and project images
+connect-za-private  private bucket for proof documents and quote attachments
+```
+
+On Render, add:
+
+```env
+SUPABASE_URL=https://your-project-ref.supabase.co
+SUPABASE_SERVICE_ROLE_KEY=your-service-role-key
+SUPABASE_STORAGE_BUCKET=connect-za-media
+SUPABASE_PRIVATE_STORAGE_BUCKET=connect-za-private
+```
+
+Do not enable `ALLOW_INLINE_UPLOAD_FALLBACK` on Render. If Supabase Storage is not configured, uploads should fail instead of being saved inline in the database.
 
 ## Connect Paystack
 
@@ -98,6 +126,6 @@ YOCO_WEBHOOK_SECRET=whsec_your_yoco_webhook_secret
 
 ## Production integration notes
 
-The app is dependency-light and uses Supabase for persistence when configured, with `data/db.json` as local fallback. For a larger production build, split the JSON state into normalized Supabase tables, connect Supabase Auth or another hardened auth service, move gallery uploads to Supabase Storage or S3, and replace the remaining PayFast, Ozow, and Stripe placeholders with signed checkout/webhook implementations.
+The app is dependency-light and uses Supabase for persistence when configured, with `data/db.json` only for local fallback. For a larger production build, split the JSON state into normalized Supabase tables, connect Supabase Auth or another hardened auth service, and replace the remaining PayFast, Ozow, and Stripe placeholders with signed checkout/webhook implementations.
 
 The PWA manifest makes the responsive web app installable. For Android/iOS app-store builds, wrap the web app with Capacitor or migrate the UI flows to React Native/Flutter using the same API contracts.
