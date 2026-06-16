@@ -1360,7 +1360,7 @@ async function api(req, res, pathname, query) {
     });
   }
 
-  if (req.method === "POST" && pathname === "/api/payments/webhook") {
+  if (req.method === "POST" && (pathname === "/api/payments/webhook" || pathname === "/webhooks/yoco")) {
     const signature = req.headers["x-paystack-signature"];
     if (signature) {
       const rawBody = await readRawBody(req);
@@ -1509,11 +1509,12 @@ function serveStatic(req, res, pathname) {
 const server = http.createServer(async (req, res) => {
   try {
     const parsed = url.parse(req.url, true);
+    const apiRoute = parsed.pathname.startsWith("/api/") || parsed.pathname === "/webhooks/yoco";
     if (parsed.pathname === "/health") return sendJson(res, { ok: true, service: "connect-za", databaseProvider: databaseProvider() });
-    if (parsed.pathname.startsWith("/api/") && Number(req.headers["content-length"] || 0) > MAX_BODY) {
+    if (apiRoute && Number(req.headers["content-length"] || 0) > MAX_BODY) {
       return sendJson(res, { error: `Uploaded files are too large. Please keep the total upload below ${MAX_BODY_MB}MB.` }, 413);
     }
-    if (parsed.pathname.startsWith("/api/")) return await api(req, res, parsed.pathname, parsed.query);
+    if (apiRoute) return await api(req, res, parsed.pathname, parsed.query);
     return serveStatic(req, res, decodeURIComponent(parsed.pathname));
   } catch (error) {
     const status = error.statusCode || 500;

@@ -83,7 +83,7 @@ Use `sk_test_...` while testing, then switch to `sk_live_...` for production.
 3. Register one Yoco Checkout webhook pointing to:
 
 ```text
-https://connect-za.com/api/payments/webhook
+https://connect-za.com/webhooks/yoco
 ```
 
 Yoco returns a webhook secret once when the webhook is created. Save it in Render as:
