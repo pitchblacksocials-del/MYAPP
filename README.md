@@ -105,6 +105,13 @@ YOCO_WEBHOOK_SECRET=whsec_your_yoco_webhook_secret
 
 4. Redeploy the Render service. The app uses Yoco for all Standard and PRIME subscriptions and waits for Yoco's signed `payment.succeeded` webhook before marking the subscription as `paid_pending_admin`.
 
+### Yoco payment troubleshooting
+
+- Open `/api/meta?payment-debug=1` and confirm `paymentStatus.checkoutConfigured` is `true`, `keyMode` is `live`, and `webhookConfigured` is `true`.
+- In the admin dashboard, use **Check Yoco webhook** to confirm Yoco has `https://connect-za.com/webhooks/yoco` or `https://www.connect-za.com/webhooks/yoco` registered.
+- If Yoco shows a card decline, the checkout reached Yoco and the decline is normally caused by the card, 3D Secure, merchant activation/KYC, or using a real card against a test key.
+- Test-mode payments do not appear in Yoco sales reports. Use `sk_live_...` for real transactions and `sk_test_...` only with Yoco test card details.
+
 ## Production integration notes
 
 The app is dependency-light and uses Supabase for persistence when configured, with `data/db.json` only for local fallback. For a larger production build, split the JSON state into normalized Supabase tables and connect Supabase Auth or another hardened auth service.

@@ -398,15 +398,48 @@ function verifyYocoWebhookSignature(rawBody, headers) {
   const timestampSeconds = Number(timestamp);
   if (!Number.isFinite(timestampSeconds)) return false;
   const ageSeconds = Math.abs(Math.floor(Date.now() / 1000) - timestampSeconds);
-  if (ageSeconds > 180) return false;
+  if (ageSeconds > 300) return false;
   const secret = YOCO_WEBHOOK_SECRET.replace(/^whsec_/, "");
   const secretBytes = Buffer.from(secret, "base64");
   const signedContent = `${webhookId}.${timestamp}.${rawBody}`;
   const expected = crypto.createHmac("sha256", secretBytes).update(signedContent).digest("base64");
-  return String(signatureHeader).split(" ").some((signature) => {
-    const [, value] = signature.split(",");
-    return value && value.length === expected.length && crypto.timingSafeEqual(Buffer.from(value), Buffer.from(expected));
+  return yocoSignatureValues(signatureHeader).some((value) => {
+    return value.length === expected.length && crypto.timingSafeEqual(Buffer.from(value), Buffer.from(expected));
   });
+}
+
+function yocoSignatureValues(signatureHeader) {
+  return String(signatureHeader).split(/\s+/).map((part) => {
+    const trimmed = part.trim();
+    if (!trimmed) return "";
+    const comma = trimmed.indexOf(",");
+    if (comma >= 0) return trimmed.slice(comma + 1).trim();
+    const equals = trimmed.indexOf("=");
+    if (equals >= 0) return trimmed.slice(equals + 1).trim();
+    return trimmed;
+  }).filter(Boolean);
+}
+
+function recordPaymentEvent(db, business, event, status, message = "") {
+  const payload = event?.payload || {};
+  const metadata = payload.metadata || event?.metadata || {};
+  db.paymentEvents ||= [];
+  db.paymentEvents.push({
+    id: uid("pev"),
+    createdAt: new Date().toISOString(),
+    yocoEventId: event?.id || "",
+    type: event?.type || payload.type || "payment",
+    status,
+    message,
+    businessId: business?.id || metadata.businessId || "",
+    businessName: business?.name || metadata.businessName || "",
+    checkoutId: metadata.checkoutId || business?.subscription?.checkoutId || business?.subscription?.yocoCheckoutId || "",
+    reference: metadata.reference || business?.subscription?.reference || payload.externalId || event?.externalId || "",
+    amount: payload.amount || null,
+    currency: payload.currency || YOCO_CURRENCY,
+    mode: payload.mode || ""
+  });
+  db.paymentEvents = db.paymentEvents.slice(-100);
 }
 
 function findBusinessForYocoEvent(db, event, fallbackBusinessId = "") {
@@ -469,6 +502,23 @@ function applyVerifiedYocoPayment(db, business, event) {
   return plan;
 }
 
+function applyYocoPaymentFailure(db, business, event) {
+  const payload = event?.payload || {};
+  const metadata = payload.metadata || {};
+  if (!business?.subscription) return;
+  const status = String(payload.status || event?.type || "failed").toLowerCase();
+  business.subscription.paymentStatus = status.includes("cancel") ? "cancelled" : "failed";
+  business.subscription.failedAt = payload.createdDate || event?.createdDate || new Date().toISOString();
+  business.subscription.failureReason = payload.failureReason || payload.reason || status;
+  business.subscription.reference = metadata.reference || business.subscription.reference;
+  business.subscription.checkoutId = metadata.checkoutId || business.subscription.checkoutId;
+  if (business.subscriptionStatus === "pending") {
+    business.subscriptionStatus = "inactive";
+    if (business.subscriptionPlan === "prime") business.primeStatus = "inactive";
+  }
+  refreshSubscriptionAnalytics(db);
+}
+
 function activeListing(business) {
   return business.subscriptionStatus === "active" || business.primeStatus === "active";
 }
@@ -484,6 +534,10 @@ function refreshSubscriptionAnalytics(db) {
 
 function normalizeBusinessSubscriptions(db) {
   let changed = false;
+  if (!Array.isArray(db.paymentEvents)) {
+    db.paymentEvents = [];
+    changed = true;
+  }
   db.settings ||= {};
   if (db.settings.standardMonthlyPrice !== SUBSCRIPTION_PLANS.standard.amount) {
     db.settings.standardMonthlyPrice = SUBSCRIPTION_PLANS.standard.amount;
@@ -586,6 +640,7 @@ function seedDb() {
     conversations: [],
     notifications: [],
     ads: [],
+    paymentEvents: [],
     analytics: {
       revenue: 0,
       standardSubscribers: 0,
@@ -1026,6 +1081,33 @@ function paymentStatus() {
     webhookConfigured: yocoWebhookConfigured(),
     currency: YOCO_CURRENCY
   };
+}
+
+async function yocoWebhookDiagnostics(expectedWebhookUrls) {
+  const expectedUrls = expectedWebhookUrls.map((item) => String(item).replace(/\/$/, ""));
+  const diagnostics = {
+    reachable: false,
+    expectedWebhookUrls,
+    connectZaWebhookRegistered: false,
+    webhooks: [],
+    error: ""
+  };
+  try {
+    const data = await yocoRequest("GET", "/webhooks");
+    const webhooks = Array.isArray(data) ? data : data.webhooks || data.data || [];
+    diagnostics.reachable = true;
+    diagnostics.webhooks = webhooks.map((item) => ({
+      id: item.id || "",
+      name: item.name || "",
+      url: item.url || "",
+      mode: item.mode || "",
+      isConnectZaWebhook: expectedUrls.includes(String(item.url || "").replace(/\/$/, ""))
+    }));
+    diagnostics.connectZaWebhookRegistered = diagnostics.webhooks.some((item) => item.isConnectZaWebhook);
+  } catch (error) {
+    diagnostics.error = error.message || "Could not check Yoco webhooks.";
+  }
+  return diagnostics;
 }
 
 function publicUser(user) {
@@ -1523,6 +1605,22 @@ async function api(req, res, pathname, query) {
     });
   }
 
+  if (req.method === "GET" && pathname === "/api/admin/yoco-diagnostics") {
+    const user = requireAuth(req, res, db, "admin");
+    if (!user) return;
+    const currentWebhookUrl = `${publicBaseUrl(req)}/webhooks/yoco`;
+    const diagnostics = await yocoWebhookDiagnostics([
+      currentWebhookUrl,
+      "https://connect-za.com/webhooks/yoco",
+      "https://www.connect-za.com/webhooks/yoco"
+    ]);
+    return sendJson(res, {
+      paymentStatus: paymentStatus(),
+      diagnostics,
+      recentEvents: (db.paymentEvents || []).slice(-25).reverse()
+    });
+  }
+
   if (req.method === "POST" && (pathname === "/api/payments/webhook" || pathname === "/webhooks/yoco")) {
     if (req.headers["webhook-signature"]) {
       const rawBody = await readRawBody(req);
@@ -1530,15 +1628,24 @@ async function api(req, res, pathname, query) {
         return sendJson(res, { error: "Invalid Yoco signature." }, 401);
       }
       const event = parseJsonBody(rawBody);
+      const business = findBusinessForYocoEvent(db, event, event.payload?.metadata?.businessId);
       if (event.type === "payment.succeeded" || event.payload?.status === "succeeded") {
-        const business = findBusinessForYocoEvent(db, event, event.payload?.metadata?.businessId);
         if (business) {
           applyVerifiedYocoPayment(db, business, event);
-          await writeDb(db);
           broadcast("subscription", publicBusiness(business));
         }
+        recordPaymentEvent(db, business, event, business ? "succeeded" : "unmatched", business ? "Payment confirmed by Yoco." : "Yoco payment succeeded but no matching business subscription was found.");
+        await writeDb(db);
+      } else {
+        const eventStatus = String(event.payload?.status || event.type || "failed");
+        if (business) {
+          applyYocoPaymentFailure(db, business, event);
+          broadcast("subscription", publicBusiness(business));
+        }
+        recordPaymentEvent(db, business, event, eventStatus, business ? `Yoco payment event: ${eventStatus}.` : `Unmatched Yoco payment event: ${eventStatus}.`);
+        await writeDb(db);
       }
-      return sendJson(res, { received: true });
+      return sendJson(res, { received: true, matched: Boolean(business) });
     }
     return sendJson(res, { error: "Yoco payments are confirmed by signed Yoco webhooks only." }, 401);
   }
@@ -1552,6 +1659,8 @@ async function api(req, res, pathname, query) {
       quotes: db.quotes,
       notifications: db.notifications,
       ads: db.ads,
+      paymentStatus: paymentStatus(),
+      paymentEvents: (db.paymentEvents || []).slice(-25).reverse(),
       analytics: {
         ...db.analytics,
         activeBusinesses: db.businesses.filter((biz) => biz.status === "approved").length,

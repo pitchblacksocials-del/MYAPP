@@ -1,8 +1,17 @@
-const CACHE = "connect-za-v33-yoco-only";
-const ASSETS = ["/", "/styles.css?v=yoco-only-1", "/app.js?v=yoco-only-1", "/legal.html", "/manifest.webmanifest", "/icons/icon.svg", "/icons/connect-za-logo.svg"];
+const CACHE = "connect-za-v34-yoco-diagnostics";
+const ASSETS = ["/", "/styles.css?v=yoco-diagnostics-1", "/app.js?v=yoco-diagnostics-1", "/legal.html", "/manifest.webmanifest", "/icons/icon.svg", "/icons/connect-za-logo.svg"];
 
 self.addEventListener("install", (event) => {
+  self.skipWaiting();
   event.waitUntil(caches.open(CACHE).then((cache) => cache.addAll(ASSETS)));
+});
+
+self.addEventListener("activate", (event) => {
+  event.waitUntil(
+    caches.keys()
+      .then((keys) => Promise.all(keys.filter((key) => key !== CACHE).map((key) => caches.delete(key))))
+      .then(() => self.clients.claim())
+  );
 });
 
 self.addEventListener("fetch", (event) => {

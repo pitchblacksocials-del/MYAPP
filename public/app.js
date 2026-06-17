@@ -729,17 +729,55 @@ function validateBusinessFiles() {
   }
 }
 
+function renderPaymentEvents(events = []) {
+  if (!events.length) return "<p>No Yoco payment events recorded yet.</p>";
+  return events.map((event) => `
+    <div class="quote-item">
+      <strong>${escapeHtml(event.status || event.type || "payment")}</strong>
+      <p>${escapeHtml(event.message || event.type || "Yoco event received.")}</p>
+      <small>${escapeHtml(event.businessName || event.businessId || "No matched business")} • ${money(Number(event.amount || 0) / 100)} ${escapeHtml(event.currency || "ZAR")} • ${escapeHtml(event.createdAt || "")}</small>
+    </div>
+  `).join("");
+}
+
+async function loadYocoDiagnostics() {
+  const panel = $("#yocoDiagnostics");
+  if (!panel) return;
+  panel.innerHTML = "<p>Checking Yoco webhook registration...</p>";
+  try {
+    const data = await api("/api/admin/yoco-diagnostics");
+    const diagnostics = data.diagnostics || {};
+    const webhooks = diagnostics.webhooks || [];
+    panel.innerHTML = `
+      <p>Yoco API: ${diagnostics.reachable ? "reachable" : "not reachable"} • Connect-ZA webhook: ${diagnostics.connectZaWebhookRegistered ? "registered" : "not found"}</p>
+      ${diagnostics.error ? `<p>${escapeHtml(diagnostics.error)}</p>` : ""}
+      <div class="quote-list">
+        ${webhooks.map((hook) => `<div class="quote-item"><strong>${escapeHtml(hook.name || hook.id)}</strong><small>${escapeHtml(hook.mode || "")} • ${escapeHtml(hook.url || "")}</small></div>`).join("") || "<p>No Yoco webhooks returned.</p>"}
+      </div>
+    `;
+  } catch (error) {
+    panel.innerHTML = `<p>${escapeHtml(error.message)}</p>`;
+  }
+}
+
 async function renderAdmin() {
   if (state.user?.type !== "admin") {
     $("#adminDashboard").innerHTML = `<div class="admin-card wide"><h3>Admin access</h3><p>Sign in with an administrator account to manage users, approvals, PRIME, revenue, reports, ads, and push notifications.</p></div>`;
     return;
   }
   const data = await api("/api/admin");
+  const yocoStatus = data.paymentStatus || {};
   $("#adminDashboard").innerHTML = `
     <div class="admin-card"><h3>Revenue</h3><h2>${money(data.analytics.revenue)}</h2><p>${data.analytics.standardSubscribers || 0} Standard and ${data.analytics.primeSubscribers || 0} PRIME</p></div>
     <div class="admin-card"><h3>Listings</h3><h2>${data.analytics.activeListings || 0}</h2><p>${data.analytics.pendingBusinesses} businesses pending approval</p></div>
     <div class="admin-card"><h3>Users</h3><h2>${data.analytics.users}</h2><p>Customers, businesses, admins</p></div>
     <div class="admin-card"><h3>Quote requests</h3><h2>${data.analytics.quoteRequests}</h2><p>Tracked marketplace demand</p></div>
+    <div class="admin-card wide">
+      <h3>Yoco payment health</h3>
+      <p>Checkout: ${yocoStatus.checkoutConfigured ? "configured" : "not configured"} • Mode: ${escapeHtml(yocoStatus.keyMode || "unknown")} • Webhook secret: ${yocoStatus.webhookConfigured ? "configured" : "missing"} • Currency: ${escapeHtml(yocoStatus.currency || "ZAR")}</p>
+      <button id="checkYocoDiagnostics" class="secondary-btn">Check Yoco webhook</button>
+      <div id="yocoDiagnostics" class="quote-list">${renderPaymentEvents(data.paymentEvents || [])}</div>
+    </div>
     <div class="admin-card wide">
       <h3>Business approval and subscription moderation</h3>
       <div class="admin-list">
@@ -896,6 +934,9 @@ document.addEventListener("click", async (event) => {
       await renderAdmin();
       await Promise.all([loadBusinesses(), loadMyBusinesses()]);
       toast("Subscription status updated");
+    }
+    if (target.id === "checkYocoDiagnostics") {
+      await loadYocoDiagnostics();
     }
   } catch (error) {
     toast(error.message);
