@@ -748,13 +748,20 @@ async function loadYocoDiagnostics() {
     const data = await api("/api/admin/yoco-diagnostics");
     const diagnostics = data.diagnostics || {};
     const webhooks = diagnostics.webhooks || [];
+    const status = data.paymentStatus || {};
     const createAction = diagnostics.reachable && !diagnostics.connectZaWebhookRegistered
       ? `<button id="createYocoWebhook" class="primary-btn">Create Connect-ZA webhook</button>`
       : "";
     panel.innerHTML = `
       <p>Yoco API: ${diagnostics.reachable ? "reachable" : "not reachable"} • Connect-ZA webhook: ${diagnostics.connectZaWebhookRegistered ? "registered" : "not found"}</p>
+      <p>Webhook secret source: ${escapeHtml(status.webhookSecretSource || "missing")}</p>
       ${diagnostics.error ? `<p>${escapeHtml(diagnostics.error)}</p>` : ""}
       ${createAction}
+      <div class="quote-item yoco-secret-box">
+        <strong>Save webhook secret without Render redeploy</strong>
+        <textarea id="yocoWebhookSecretInput" rows="3" placeholder="Paste whsec_... from Yoco"></textarea>
+        <button id="saveYocoWebhookSecret" class="secondary-btn">Save secret in Connect-ZA</button>
+      </div>
       <div class="quote-list">
         ${webhooks.map((hook) => `<div class="quote-item"><strong>${escapeHtml(hook.name || hook.id)}</strong><small>${escapeHtml(hook.mode || "")} • ${escapeHtml(hook.url || "")}</small></div>`).join("") || "<p>No Yoco webhooks returned.</p>"}
       </div>
@@ -778,7 +785,7 @@ async function createYocoWebhook() {
       <div class="quote-item yoco-secret-box">
         <strong>Webhook secret - copy this now</strong>
         <textarea readonly rows="3">${escapeHtml(secret)}</textarea>
-        <small>Save this in Render as YOCO_WEBHOOK_SECRET, then redeploy/restart the service.</small>
+        <small>This was also saved in Connect-ZA. Save it in Render as YOCO_WEBHOOK_SECRET later when Render redeploy works.</small>
       </div>
     ` : "";
     panel.innerHTML = `
@@ -789,6 +796,24 @@ async function createYocoWebhook() {
     toast(data.created ? "Yoco webhook created" : "Yoco webhook already exists");
   } catch (error) {
     panel.innerHTML = `<p>${escapeHtml(error.message)}</p><button id="checkYocoDiagnostics" class="secondary-btn">Check again</button>`;
+  }
+}
+
+async function saveYocoWebhookSecret() {
+  const panel = $("#yocoDiagnostics");
+  const input = $("#yocoWebhookSecretInput");
+  if (!panel || !input) return;
+  const secret = input.value.trim();
+  if (!secret) return toast("Paste the Yoco whsec_ secret first");
+  try {
+    const data = await api("/api/admin/yoco-webhook-secret", {
+      method: "POST",
+      body: JSON.stringify({ secret })
+    });
+    toast(data.message || "Yoco webhook secret saved");
+    await loadYocoDiagnostics();
+  } catch (error) {
+    toast(error.message);
   }
 }
 
@@ -972,6 +997,9 @@ document.addEventListener("click", async (event) => {
     }
     if (target.id === "createYocoWebhook") {
       await createYocoWebhook();
+    }
+    if (target.id === "saveYocoWebhookSecret") {
+      await saveYocoWebhookSecret();
     }
   } catch (error) {
     toast(error.message);

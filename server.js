@@ -292,8 +292,23 @@ function yocoConfigured() {
     && /^sk_(test|live)_/.test(YOCO_SECRET_KEY);
 }
 
-function yocoWebhookConfigured() {
-  return configured(YOCO_WEBHOOK_SECRET, ["your-yoco-webhook-secret", "whsec_xxx"]);
+function cleanYocoWebhookSecret(secret = "") {
+  return String(secret || "").trim().replace(/^["']|["']$/g, "");
+}
+
+function storedYocoWebhookSecret(db) {
+  return cleanYocoWebhookSecret(db?.settings?.yocoWebhookSecret || "");
+}
+
+function yocoWebhookSecrets(db) {
+  return Array.from(new Set([
+    storedYocoWebhookSecret(db),
+    cleanYocoWebhookSecret(YOCO_WEBHOOK_SECRET)
+  ].filter((secret) => configured(secret, ["your-yoco-webhook-secret", "whsec_xxx"]) && /^whsec_/.test(secret))));
+}
+
+function yocoWebhookConfigured(db = null) {
+  return yocoWebhookSecrets(db).length > 0;
 }
 
 function publicBaseUrl(req) {
@@ -390,21 +405,23 @@ async function initializeYocoCheckout(req, user, business, plan, autoRenew) {
   };
 }
 
-function verifyYocoWebhookSignature(rawBody, headers) {
+function verifyYocoWebhookSignature(rawBody, headers, db = null) {
   const webhookId = headers["webhook-id"];
   const timestamp = headers["webhook-timestamp"];
   const signatureHeader = headers["webhook-signature"];
-  if (!yocoWebhookConfigured() || !webhookId || !timestamp || !signatureHeader) return false;
+  if (!yocoWebhookConfigured(db) || !webhookId || !timestamp || !signatureHeader) return false;
   const timestampSeconds = Number(timestamp);
   if (!Number.isFinite(timestampSeconds)) return false;
   const ageSeconds = Math.abs(Math.floor(Date.now() / 1000) - timestampSeconds);
   if (ageSeconds > 300) return false;
-  const secret = YOCO_WEBHOOK_SECRET.replace(/^whsec_/, "");
-  const secretBytes = Buffer.from(secret, "base64");
   const signedContent = `${webhookId}.${timestamp}.${rawBody}`;
-  const expected = crypto.createHmac("sha256", secretBytes).update(signedContent).digest("base64");
-  return yocoSignatureValues(signatureHeader).some((value) => {
-    return value.length === expected.length && crypto.timingSafeEqual(Buffer.from(value), Buffer.from(expected));
+  const incomingValues = yocoSignatureValues(signatureHeader);
+  return yocoWebhookSecrets(db).some((webhookSecret) => {
+    const secretBytes = Buffer.from(webhookSecret.replace(/^whsec_/, ""), "base64");
+    const expected = crypto.createHmac("sha256", secretBytes).update(signedContent).digest("base64");
+    return incomingValues.some((value) => {
+      return value.length === expected.length && crypto.timingSafeEqual(Buffer.from(value), Buffer.from(expected));
+    });
   });
 }
 
@@ -1074,11 +1091,18 @@ function storageStatus() {
 }
 
 function paymentStatus() {
+  return paymentStatusForDb(null);
+}
+
+function paymentStatusForDb(db) {
+  const hasStoredWebhookSecret = Boolean(storedYocoWebhookSecret(db));
+  const hasRenderWebhookSecret = yocoWebhookSecrets(null).length > 0;
   return {
     provider: "yoco",
     checkoutConfigured: yocoConfigured(),
     keyMode: YOCO_SECRET_KEY.startsWith("sk_live_") ? "live" : YOCO_SECRET_KEY.startsWith("sk_test_") ? "test" : "invalid-or-missing",
-    webhookConfigured: yocoWebhookConfigured(),
+    webhookConfigured: yocoWebhookConfigured(db),
+    webhookSecretSource: hasStoredWebhookSecret ? "database" : hasRenderWebhookSecret ? "render-env" : "missing",
     currency: YOCO_CURRENCY
   };
 }
@@ -1132,9 +1156,26 @@ async function registerYocoWebhook(webhookUrl) {
   };
 }
 
+function saveYocoWebhookSecret(db, secret) {
+  const cleaned = cleanYocoWebhookSecret(secret);
+  if (!configured(cleaned, ["your-yoco-webhook-secret", "whsec_xxx"]) || !/^whsec_[A-Za-z0-9_-]{12,}$/.test(cleaned)) {
+    const error = new Error("Paste the Yoco webhook secret that starts with whsec_.");
+    error.statusCode = 400;
+    throw error;
+  }
+  db.settings ||= {};
+  db.settings.yocoWebhookSecret = cleaned;
+  db.settings.yocoWebhookSecretUpdatedAt = new Date().toISOString();
+}
+
 function publicUser(user) {
   if (!user) return null;
   const { passwordHash, ...safe } = user;
+  return safe;
+}
+
+function publicSettings(settings = {}) {
+  const { yocoWebhookSecret, yocoWebhookSecretUpdatedAt, ...safe } = settings;
   return safe;
 }
 
@@ -1336,7 +1377,7 @@ async function api(req, res, pathname, query) {
     if (supabaseStorageConfigured()) {
       await ensureSupabaseStorageBuckets().catch(() => {});
     }
-    return sendJson(res, { categories, provinces, cities, settings: db.settings, databaseProvider: databaseProvider(), databaseStatus: databaseStatus(), storageStatus: storageStatus(), paymentStatus: paymentStatus() });
+    return sendJson(res, { categories, provinces, cities, settings: publicSettings(db.settings), databaseProvider: databaseProvider(), databaseStatus: databaseStatus(), storageStatus: storageStatus(), paymentStatus: paymentStatusForDb(db) });
   }
 
   if (req.method === "POST" && pathname === "/api/auth/register") {
@@ -1632,7 +1673,7 @@ async function api(req, res, pathname, query) {
     if (!user) return;
     const diagnostics = await yocoWebhookDiagnostics(expectedYocoWebhookUrls(req));
     return sendJson(res, {
-      paymentStatus: paymentStatus(),
+      paymentStatus: paymentStatusForDb(db),
       diagnostics,
       recentEvents: (db.paymentEvents || []).slice(-25).reverse()
     });
@@ -1652,19 +1693,36 @@ async function api(req, res, pathname, query) {
       return sendJson(res, { created: false, message: "Connect-ZA webhook is already registered in Yoco.", diagnostics: before });
     }
     const webhook = await registerYocoWebhook(webhookUrl);
+    if (webhook.secret) {
+      saveYocoWebhookSecret(db, webhook.secret);
+      await writeDb(db);
+    }
     const after = await yocoWebhookDiagnostics(allowedUrls);
     return sendJson(res, {
       created: true,
-      message: "Yoco webhook created. Copy the returned secret into Render as YOCO_WEBHOOK_SECRET, then redeploy.",
+      message: webhook.secret ? "Yoco webhook created and saved in Connect-ZA. Also copy the returned secret into Render as YOCO_WEBHOOK_SECRET when Render redeploy works." : "Yoco webhook created. Copy the returned secret into Render as YOCO_WEBHOOK_SECRET, then redeploy.",
       webhook,
       diagnostics: after
     }, 201);
   }
 
+  if (req.method === "POST" && pathname === "/api/admin/yoco-webhook-secret") {
+    const user = requireAuth(req, res, db, "admin");
+    if (!user) return;
+    const body = await readBody(req);
+    saveYocoWebhookSecret(db, body.secret);
+    await writeDb(db);
+    return sendJson(res, {
+      saved: true,
+      message: "Yoco webhook secret saved in Connect-ZA. Payments can now be verified without waiting for a Render redeploy.",
+      paymentStatus: paymentStatusForDb(db)
+    });
+  }
+
   if (req.method === "POST" && (pathname === "/api/payments/webhook" || pathname === "/webhooks/yoco")) {
     if (req.headers["webhook-signature"]) {
       const rawBody = await readRawBody(req);
-      if (!verifyYocoWebhookSignature(rawBody, req.headers)) {
+      if (!verifyYocoWebhookSignature(rawBody, req.headers, db)) {
         return sendJson(res, { error: "Invalid Yoco signature." }, 401);
       }
       const event = parseJsonBody(rawBody);
@@ -1699,7 +1757,7 @@ async function api(req, res, pathname, query) {
       quotes: db.quotes,
       notifications: db.notifications,
       ads: db.ads,
-      paymentStatus: paymentStatus(),
+      paymentStatus: paymentStatusForDb(db),
       paymentEvents: (db.paymentEvents || []).slice(-25).reverse(),
       analytics: {
         ...db.analytics,

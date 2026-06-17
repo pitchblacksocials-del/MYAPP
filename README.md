@@ -108,7 +108,8 @@ YOCO_WEBHOOK_SECRET=whsec_your_yoco_webhook_secret
 ### Yoco payment troubleshooting
 
 - Open `/api/meta?payment-debug=1` and confirm `paymentStatus.checkoutConfigured` is `true`, `keyMode` is `live`, and `webhookConfigured` is `true`.
-- In the admin dashboard, use **Check Yoco webhook** to confirm Yoco has `https://connect-za.com/webhooks/yoco` or `https://www.connect-za.com/webhooks/yoco` registered. If it is missing, use **Create Connect-ZA webhook**, then copy the returned `whsec_...` value into Render as `YOCO_WEBHOOK_SECRET` and redeploy.
+- In the admin dashboard, use **Check Yoco webhook** to confirm Yoco has `https://connect-za.com/webhooks/yoco` or `https://www.connect-za.com/webhooks/yoco` registered. If it is missing, use **Create Connect-ZA webhook**. The returned `whsec_...` value is saved in Connect-ZA immediately; also copy it into Render as `YOCO_WEBHOOK_SECRET` when Render redeploy is working.
+- If Render will not redeploy after changing environment variables, paste the `whsec_...` value into **Save secret in Connect-ZA** in the admin Yoco payment health panel. This stores the webhook secret in the Supabase-backed app state so Yoco webhooks can be verified without waiting for a Render restart.
 - If Yoco shows a card decline, the checkout reached Yoco and the decline is normally caused by the card, 3D Secure, merchant activation/KYC, or using a real card against a test key.
 - Test-mode payments do not appear in Yoco sales reports. Use `sk_live_...` for real transactions and `sk_test_...` only with Yoco test card details.
 
