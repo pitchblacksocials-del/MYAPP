@@ -1,5 +1,5 @@
-const CACHE = "connect-za-v34-yoco-diagnostics";
-const ASSETS = ["/", "/styles.css?v=yoco-diagnostics-1", "/app.js?v=yoco-diagnostics-1", "/legal.html", "/manifest.webmanifest", "/icons/icon.svg", "/icons/connect-za-logo.svg"];
+const CACHE = "connect-za-v35-yoco-webhook-register";
+const ASSETS = ["/", "/styles.css?v=yoco-webhook-register-1", "/app.js?v=yoco-webhook-register-1", "/legal.html", "/manifest.webmanifest", "/icons/icon.svg", "/icons/connect-za-logo.svg"];
 
 self.addEventListener("install", (event) => {
   self.skipWaiting();

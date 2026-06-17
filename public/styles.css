@@ -1069,6 +1069,17 @@ textarea {
   border-radius: 8px;
 }
 
+.yoco-secret-box {
+  display: grid;
+  gap: 8px;
+}
+
+.yoco-secret-box textarea {
+  min-height: 72px;
+  font-family: "Courier New", monospace;
+  font-size: 0.78rem;
+}
+
 .review-row {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));

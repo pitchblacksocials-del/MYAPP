@@ -1110,6 +1110,28 @@ async function yocoWebhookDiagnostics(expectedWebhookUrls) {
   return diagnostics;
 }
 
+function expectedYocoWebhookUrls(req) {
+  return Array.from(new Set([
+    `${publicBaseUrl(req)}/webhooks/yoco`,
+    "https://connect-za.com/webhooks/yoco",
+    "https://www.connect-za.com/webhooks/yoco"
+  ].map((item) => String(item).replace(/\/$/, ""))));
+}
+
+async function registerYocoWebhook(webhookUrl) {
+  const data = await yocoRequest("POST", "/webhooks", {
+    name: "Connect-ZA Production",
+    url: webhookUrl
+  });
+  return {
+    id: data.id || "",
+    name: data.name || "Connect-ZA Production",
+    url: data.url || webhookUrl,
+    mode: data.mode || "",
+    secret: data.secret || ""
+  };
+}
+
 function publicUser(user) {
   if (!user) return null;
   const { passwordHash, ...safe } = user;
@@ -1608,17 +1630,35 @@ async function api(req, res, pathname, query) {
   if (req.method === "GET" && pathname === "/api/admin/yoco-diagnostics") {
     const user = requireAuth(req, res, db, "admin");
     if (!user) return;
-    const currentWebhookUrl = `${publicBaseUrl(req)}/webhooks/yoco`;
-    const diagnostics = await yocoWebhookDiagnostics([
-      currentWebhookUrl,
-      "https://connect-za.com/webhooks/yoco",
-      "https://www.connect-za.com/webhooks/yoco"
-    ]);
+    const diagnostics = await yocoWebhookDiagnostics(expectedYocoWebhookUrls(req));
     return sendJson(res, {
       paymentStatus: paymentStatus(),
       diagnostics,
       recentEvents: (db.paymentEvents || []).slice(-25).reverse()
     });
+  }
+
+  if (req.method === "POST" && pathname === "/api/admin/yoco-webhook") {
+    const user = requireAuth(req, res, db, "admin");
+    if (!user) return;
+    const body = await readBody(req);
+    const allowedUrls = expectedYocoWebhookUrls(req);
+    const webhookUrl = String(body.url || "https://connect-za.com/webhooks/yoco").replace(/\/$/, "");
+    if (!allowedUrls.includes(webhookUrl)) {
+      return sendJson(res, { error: "Webhook URL must be the Connect-ZA Yoco webhook URL." }, 400);
+    }
+    const before = await yocoWebhookDiagnostics(allowedUrls);
+    if (before.connectZaWebhookRegistered) {
+      return sendJson(res, { created: false, message: "Connect-ZA webhook is already registered in Yoco.", diagnostics: before });
+    }
+    const webhook = await registerYocoWebhook(webhookUrl);
+    const after = await yocoWebhookDiagnostics(allowedUrls);
+    return sendJson(res, {
+      created: true,
+      message: "Yoco webhook created. Copy the returned secret into Render as YOCO_WEBHOOK_SECRET, then redeploy.",
+      webhook,
+      diagnostics: after
+    }, 201);
   }
 
   if (req.method === "POST" && (pathname === "/api/payments/webhook" || pathname === "/webhooks/yoco")) {

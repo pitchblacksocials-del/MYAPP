@@ -748,15 +748,47 @@ async function loadYocoDiagnostics() {
     const data = await api("/api/admin/yoco-diagnostics");
     const diagnostics = data.diagnostics || {};
     const webhooks = diagnostics.webhooks || [];
+    const createAction = diagnostics.reachable && !diagnostics.connectZaWebhookRegistered
+      ? `<button id="createYocoWebhook" class="primary-btn">Create Connect-ZA webhook</button>`
+      : "";
     panel.innerHTML = `
       <p>Yoco API: ${diagnostics.reachable ? "reachable" : "not reachable"} • Connect-ZA webhook: ${diagnostics.connectZaWebhookRegistered ? "registered" : "not found"}</p>
       ${diagnostics.error ? `<p>${escapeHtml(diagnostics.error)}</p>` : ""}
+      ${createAction}
       <div class="quote-list">
         ${webhooks.map((hook) => `<div class="quote-item"><strong>${escapeHtml(hook.name || hook.id)}</strong><small>${escapeHtml(hook.mode || "")} • ${escapeHtml(hook.url || "")}</small></div>`).join("") || "<p>No Yoco webhooks returned.</p>"}
       </div>
     `;
   } catch (error) {
     panel.innerHTML = `<p>${escapeHtml(error.message)}</p>`;
+  }
+}
+
+async function createYocoWebhook() {
+  const panel = $("#yocoDiagnostics");
+  if (!panel) return;
+  panel.innerHTML = "<p>Creating Connect-ZA webhook in Yoco...</p>";
+  try {
+    const data = await api("/api/admin/yoco-webhook", {
+      method: "POST",
+      body: JSON.stringify({ url: "https://connect-za.com/webhooks/yoco" })
+    });
+    const secret = data.webhook?.secret || "";
+    const secretBlock = secret ? `
+      <div class="quote-item yoco-secret-box">
+        <strong>Webhook secret - copy this now</strong>
+        <textarea readonly rows="3">${escapeHtml(secret)}</textarea>
+        <small>Save this in Render as YOCO_WEBHOOK_SECRET, then redeploy/restart the service.</small>
+      </div>
+    ` : "";
+    panel.innerHTML = `
+      <p>${escapeHtml(data.message || "Yoco webhook checked.")}</p>
+      ${secretBlock}
+      <button id="checkYocoDiagnostics" class="secondary-btn">Check again</button>
+    `;
+    toast(data.created ? "Yoco webhook created" : "Yoco webhook already exists");
+  } catch (error) {
+    panel.innerHTML = `<p>${escapeHtml(error.message)}</p><button id="checkYocoDiagnostics" class="secondary-btn">Check again</button>`;
   }
 }
 
@@ -937,6 +969,9 @@ document.addEventListener("click", async (event) => {
     }
     if (target.id === "checkYocoDiagnostics") {
       await loadYocoDiagnostics();
+    }
+    if (target.id === "createYocoWebhook") {
+      await createYocoWebhook();
     }
   } catch (error) {
     toast(error.message);
