@@ -1,7 +1,7 @@
 {
-  "name": "connect-za",
+  "name": "opportunity-hub",
   "version": "1.0.0",
-  "description": "Connect-ZA business marketplace platform - Connecting Professionals.",
+  "description": "Applicant intake platform for training, work, enterprise development, and supplier development opportunities.",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
@@ -9,16 +9,20 @@
     "test": "node --check server.js"
   },
   "keywords": [
-    "marketplace",
+    "applicant-intake",
     "south-africa",
-    "business-directory",
+    "opportunities",
     "pwa"
   ],
-  "author": "Connect-ZA",
+  "author": "Opportunity Hub",
   "license": "UNLICENSED",
   "dependencies": {
     "@supabase/ssr": "^0.12.0",
     "@supabase/supabase-js": "^2.108.1",
+    "exceljs": "^4.4.0",
     "pg": "^8.21.0"
+  },
+  "overrides": {
+    "uuid": "^11.1.1"
   }
 }

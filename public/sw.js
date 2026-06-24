@@ -1,5 +1,5 @@
-const CACHE = "connect-za-v36-yoco-secret-db";
-const ASSETS = ["/", "/styles.css?v=yoco-secret-db-1", "/app.js?v=yoco-secret-db-1", "/legal.html", "/manifest.webmanifest", "/icons/icon.svg", "/icons/connect-za-logo.svg"];
+const CACHE = "opportunity-hub-v3-linear-modern";
+const ASSETS = ["/", "/opportunities", "/styles.css?v=linear-modern-1", "/app.js?v=linear-modern-1", "/manifest.webmanifest", "/icons/opportunity-icon.svg", "/icons/opportunity-hub-logo.svg"];
 
 self.addEventListener("install", (event) => {
   self.skipWaiting();

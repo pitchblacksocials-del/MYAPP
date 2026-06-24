@@ -7,10 +7,14 @@ const state = {
   businessCoverDraft: "",
   businessProjectsDraft: [],
   currentBusiness: null,
+  opportunities: [],
+  selectedOpportunity: null,
+  applicationStep: "details",
+  adminData: null,
   conversations: [],
   activeConversation: null,
   activePage: "home",
-  meta: { categories: [], provinces: [], cities: [] }
+  meta: { categories: [], provinces: [], cities: [], opportunityTypes: [], applicationStatuses: [] }
 };
 
 const $ = (selector) => document.querySelector(selector);
@@ -72,6 +76,8 @@ const MAX_PROJECTS = 3;
 const MAX_PROJECT_PHOTOS = 5;
 const MAX_BUSINESS_FILE_BYTES = 8 * 1024 * 1024;
 const MAX_BUSINESS_UPLOAD_BYTES = 20 * 1024 * 1024;
+const MAX_APPLICATION_FILE_BYTES = 10 * 1024 * 1024;
+const MAX_APPLICATION_UPLOAD_BYTES = 24 * 1024 * 1024;
 
 function subscriptionPlanLabel(plan) {
   const data = subscriptionPlans[plan] || subscriptionPlans.standard;
@@ -118,6 +124,19 @@ function fillSelect(node, values, placeholder) {
   node.innerHTML = `<option value="">${placeholder}</option>` + values.map((value) => `<option value="${value}">${value}</option>`).join("");
 }
 
+function fillOptionSelect(node, values, placeholder) {
+  node.innerHTML = `<option value="">${placeholder}</option>` + values.map((item) => `<option value="${item.value}">${item.label}</option>`).join("");
+}
+
+function opportunityTypeLabel(value) {
+  return state.meta.opportunityTypes.find((item) => item.value === value)?.label || "Opportunity";
+}
+
+function compactDate(value) {
+  if (!value) return "No closing date";
+  return new Date(`${value}T12:00:00`).toLocaleDateString("en-ZA", { year: "numeric", month: "short", day: "numeric" });
+}
+
 function syncCityFilter(sourceId) {
   const heroCity = $("#heroCityFilter");
   const discoverCity = $("#cityFilter");
@@ -159,12 +178,18 @@ async function boot() {
     fillSelect($("#categoryFilter"), state.meta.categories, "All categories");
     fillSelect($("#discoverProvinceFilter"), state.meta.provinces, "All provinces");
     fillSelect($("#discoverCategoryFilter"), state.meta.categories, "All categories");
+    fillOptionSelect($("#opportunityTypeFilter"), state.meta.opportunityTypes, "All opportunity types");
+    fillSelect($("#opportunityProvinceFilter"), state.meta.provinces, "All provinces");
+    fillSelect($("#opportunityCityFilter"), state.meta.cities, "All cities/towns");
+    fillSelect($("#applicantProvince"), state.meta.provinces, "Province");
+    fillSelect($("#applicantCity"), state.meta.cities, "City or town");
     fillSelect($("#bizProvince"), state.meta.provinces, "Province");
     fillSelect($("#bizCity"), state.meta.cities, "City or town");
     fillSelect($("#bizCategory"), state.meta.categories, "Business category");
     renderCategories();
     await loadMe();
     await loadMyBusinesses();
+    await loadOpportunities();
     await loadBusinesses();
     await loadConversations();
     await loadQuotes();
@@ -186,16 +211,17 @@ async function loadMe() {
 }
 
 function renderUser() {
-  $("#openAuth").textContent = state.user ? state.user.name.split(" ")[0] : "Sign in";
-  $("#openBusiness").disabled = state.user?.type === "customer";
-  $("#openBusiness").textContent = "List Business";
-  if (state.user?.type === "business") $("#openBusiness").textContent = "Business Profile";
-  if (state.user?.type === "admin") $("#openBusiness").textContent = "Admin mode";
+  $("#openAuth").textContent = state.user ? state.user.name.split(" ")[0] : "Staff sign in";
+  $("#openBusiness").disabled = false;
+  $("#openBusiness").textContent = state.user?.type === "admin" ? "Applicant hub" : "Admin hub";
+  const themeToggle = $("#themeToggle");
+  if (themeToggle) themeToggle.textContent = "Mode";
   renderPrimePanel();
 }
 
 const routeSections = {
   home: "#home",
+  opportunities: "#opportunities",
   discover: "#discover",
   plans: "#prime",
   profile: "#profileSection",
@@ -204,7 +230,8 @@ const routeSections = {
 };
 
 const legacyHashRoutes = {
-  "#home": "/",
+  "#home": "/opportunities",
+  "#opportunities": "/opportunities",
   "#discover": "/discover",
   "#prime": "/plans",
   "#chat": "/chat",
@@ -223,14 +250,10 @@ function routeFromLocation() {
     history.replaceState({}, "", legacyHashRoutes[location.hash]);
   }
   const path = normalizeRoutePath();
-  if (path === "/") return { page: "home" };
-  if (path === "/discover") return { page: "discover" };
-  if (path === "/plans") return { page: "plans" };
-  if (path === "/chat") return { page: "chat" };
+  if (path === "/") return { page: "opportunities" };
+  if (path === "/opportunities") return { page: "opportunities" };
   if (path === "/admin") return { page: "admin" };
-  if (path.startsWith("/profile/")) return { page: "profile", businessId: decodeURIComponent(path.split("/").filter(Boolean)[1] || "") };
-  if (path === "/profile") return { page: "profile" };
-  return { page: "home" };
+  return { page: "opportunities" };
 }
 
 function updateNav(page) {
@@ -250,11 +273,8 @@ function showOnlyPage(page) {
 async function applyRoute({ scroll = false } = {}) {
   const route = routeFromLocation();
   showOnlyPage(route.page);
+  if (route.page === "opportunities") await loadOpportunities();
   if (route.page === "admin") await renderAdmin();
-  if (route.page === "profile" && route.businessId) await renderProfile(route.businessId);
-  if (route.page === "profile" && !route.businessId && !$("#profileSection").innerHTML.trim()) {
-    $("#profileSection").innerHTML = `<div class="admin-card"><h2>Business profile</h2><p>Select a business from Discover to view its profile.</p><a class="primary-btn" href="/discover" data-route="discover">Browse businesses</a></div>`;
-  }
   if (scroll) window.scrollTo({ top: 0, behavior: "smooth" });
 }
 
@@ -296,6 +316,110 @@ async function loadMyBusinesses() {
     state.myBusinesses = [];
   }
   renderPrimePanel();
+}
+
+async function loadOpportunities() {
+  const params = new URLSearchParams({
+    q: $("#opportunitySearchInput")?.value || "",
+    type: $("#opportunityTypeFilter")?.value || "",
+    province: $("#opportunityProvinceFilter")?.value || "",
+    city: $("#opportunityCityFilter")?.value || ""
+  });
+  const { opportunities } = await api(`/api/opportunities?${params}`);
+  state.opportunities = opportunities;
+  renderOpportunities();
+}
+
+function renderOpportunities() {
+  const grid = $("#opportunityGrid");
+  if (!grid) return;
+  grid.innerHTML = state.opportunities.map((opportunity) => {
+    const place = [opportunity.city, opportunity.province].filter(Boolean).join(", ") || "National";
+    const certificates = opportunity.type === "supplier" || opportunity.type === "enterprise" ? "CV or company profile accepted" : "CV required";
+    return `
+      <article class="opportunity-card">
+        <div class="opportunity-card-head">
+          <span class="status-pill">${escapeHtml(opportunity.typeLabel || opportunityTypeLabel(opportunity.type))}</span>
+          <small>${escapeHtml(compactDate(opportunity.closingDate))}</small>
+        </div>
+        <h3>${escapeHtml(opportunity.title)}</h3>
+        <p>${escapeHtml(opportunity.summary || "")}</p>
+        <div class="meta-line"><span>${escapeHtml(place)}</span><span>${escapeHtml(certificates)}</span><span>${Number(opportunity.applicationCount || 0)} applicants</span></div>
+        <button class="primary-btn apply-opportunity" data-id="${opportunity.id}">Apply</button>
+      </article>
+    `;
+  }).join("") || `<div class="admin-card wide"><h3>No open opportunities</h3><p>New intakes will appear here when they are opened by the admin team.</p></div>`;
+}
+
+function setApplicationStep(step) {
+  state.applicationStep = step;
+  $("#applicationDetailsStep").classList.toggle("hidden", step !== "details");
+  $("#applicationFilesStep").classList.toggle("hidden", step !== "files");
+  $("#applicationStepOne").classList.toggle("active", step === "details");
+  $("#applicationStepTwo").classList.toggle("active", step === "files");
+}
+
+function openApplicationDialog(opportunityId) {
+  const opportunity = state.opportunities.find((item) => item.id === opportunityId);
+  if (!opportunity) return toast("Opportunity could not be found.");
+  state.selectedOpportunity = opportunity;
+  $("#applicationTypeLabel").textContent = opportunity.typeLabel || opportunityTypeLabel(opportunity.type);
+  $("#applicationTitle").textContent = opportunity.title;
+  $("#applicationMessage").textContent = "";
+  $("#applicantFirstName").value = "";
+  $("#applicantSurname").value = "";
+  $("#applicantEmail").value = "";
+  $("#applicantPhone").value = "";
+  $("#applicantProvince").value = "";
+  $("#applicantCity").value = "";
+  $("#applicantNotes").value = "";
+  $("#applicantCv").value = "";
+  $("#applicantCertificates").value = "";
+  setApplicationStep("details");
+  $("#applicationDialog").showModal();
+}
+
+function validateApplicationDetails() {
+  if (!$("#applicantFirstName").value.trim() || !$("#applicantSurname").value.trim()) throw new Error("Name and surname are required.");
+  if (!$("#applicantEmail").value.trim()) throw new Error("Email is required.");
+  if (!$("#applicantPhone").value.trim()) throw new Error("Phone number is required.");
+  if (!$("#applicantProvince").value) throw new Error("Province is required.");
+  if (!$("#applicantCity").value) throw new Error("City is required.");
+}
+
+function validateApplicationFiles() {
+  const files = [$("#applicantCv"), $("#applicantCertificates")].flatMap((input) => Array.from(input.files || []));
+  if (!$("#applicantCv").files.length) throw new Error("Please upload your CV.");
+  const oversized = files.find((file) => file.size > MAX_APPLICATION_FILE_BYTES);
+  if (oversized) throw new Error(`${oversized.name} is too large. Please use files smaller than 10MB each.`);
+  const totalSize = files.reduce((sum, file) => sum + file.size, 0);
+  if (totalSize > MAX_APPLICATION_UPLOAD_BYTES) throw new Error("Application uploads are too large. Please keep the total below 24MB.");
+}
+
+async function submitApplication() {
+  if (!state.selectedOpportunity) throw new Error("Select an opportunity first.");
+  validateApplicationDetails();
+  validateApplicationFiles();
+  const cv = (await fileInputsToDataUrls($("#applicantCv")))[0];
+  const certificates = await fileInputsToDataUrls($("#applicantCertificates"));
+  const { application } = await api("/api/applications", {
+    method: "POST",
+    body: JSON.stringify({
+      opportunityId: state.selectedOpportunity.id,
+      firstName: $("#applicantFirstName").value,
+      surname: $("#applicantSurname").value,
+      email: $("#applicantEmail").value,
+      phone: $("#applicantPhone").value,
+      province: $("#applicantProvince").value,
+      city: $("#applicantCity").value,
+      notes: $("#applicantNotes").value,
+      cv,
+      certificates
+    })
+  });
+  $("#applicationDialog").close();
+  await loadOpportunities();
+  toast(`${application.fullName} application submitted`);
 }
 
 function renderPrimePanel() {
@@ -817,18 +941,236 @@ async function saveYocoWebhookSecret() {
   }
 }
 
+function adminFilterValue(id) {
+  return $(`#${id}`)?.value || "";
+}
+
+function filteredAdminApplications() {
+  const data = state.adminData || {};
+  const q = adminFilterValue("adminApplicantSearch").trim().toLowerCase();
+  const province = adminFilterValue("adminApplicantProvince");
+  const type = adminFilterValue("adminApplicantType");
+  const status = adminFilterValue("adminApplicantStatus");
+  const opportunityId = adminFilterValue("adminApplicantOpportunity");
+  const sort = adminFilterValue("adminApplicantSort") || "newest";
+  const applications = (data.applications || [])
+    .filter((application) => !q || [
+      application.fullName,
+      application.email,
+      application.phone,
+      application.city,
+      application.province,
+      application.opportunityTitle,
+      application.opportunityTypeLabel
+    ].join(" ").toLowerCase().includes(q))
+    .filter((application) => !province || application.province === province)
+    .filter((application) => !type || application.opportunityType === type)
+    .filter((application) => !status || application.status === status)
+    .filter((application) => !opportunityId || application.opportunityId === opportunityId);
+
+  const sorters = {
+    newest: (a, b) => new Date(b.createdAt) - new Date(a.createdAt),
+    oldest: (a, b) => new Date(a.createdAt) - new Date(b.createdAt),
+    province: (a, b) => a.province.localeCompare(b.province) || a.fullName.localeCompare(b.fullName),
+    opportunity: (a, b) => a.opportunityTitle.localeCompare(b.opportunityTitle) || a.fullName.localeCompare(b.fullName),
+    status: (a, b) => a.status.localeCompare(b.status) || new Date(b.createdAt) - new Date(a.createdAt)
+  };
+  return applications.sort(sorters[sort] || sorters.newest);
+}
+
+function adminApplicationExportQuery() {
+  const params = new URLSearchParams({
+    q: adminFilterValue("adminApplicantSearch"),
+    province: adminFilterValue("adminApplicantProvince"),
+    type: adminFilterValue("adminApplicantType"),
+    status: adminFilterValue("adminApplicantStatus"),
+    opportunityId: adminFilterValue("adminApplicantOpportunity")
+  });
+  return params.toString();
+}
+
+function countBy(items, key) {
+  return items.reduce((acc, item) => {
+    const value = item[key] || "Not set";
+    acc[value] = (acc[value] || 0) + 1;
+    return acc;
+  }, {});
+}
+
+function provinceBreakdownHtml(applications) {
+  const counts = countBy(applications, "province");
+  const total = applications.length || 1;
+  return Object.entries(counts).sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])).map(([province, count]) => `
+    <div class="province-meter">
+      <span>${escapeHtml(province)}</span>
+      <strong>${count}</strong>
+      <i style="--meter:${Math.max(6, Math.round((count / total) * 100))}%"></i>
+    </div>
+  `).join("") || `<p>No applicants match the current filters.</p>`;
+}
+
+function applicantFileLinks(application) {
+  const cv = application.documents?.cv;
+  const certs = application.documents?.certificates || [];
+  return `
+    ${cv?.downloadUrl ? `<a class="secondary-btn" href="${cv.downloadUrl}" target="_blank" rel="noreferrer">CV</a>` : ""}
+    ${certs.map((file, index) => file.downloadUrl ? `<a class="secondary-btn" href="${file.downloadUrl}" target="_blank" rel="noreferrer">Cert ${index + 1}</a>` : "").join("")}
+  `;
+}
+
+function applicantRowsHtml(applications) {
+  return applications.map((application) => `
+    <div class="admin-row applicant-row">
+      <div>
+        <strong>${escapeHtml(application.fullName)}</strong>
+        <small>${escapeHtml(application.opportunityTypeLabel)} - ${escapeHtml(application.opportunityTitle)}</small>
+      </div>
+      <small>${escapeHtml(application.city)}, ${escapeHtml(application.province)} - ${escapeHtml(application.phone)} - ${escapeHtml(application.email)}</small>
+      ${application.notes ? `<p>${escapeHtml(application.notes)}</p>` : ""}
+      <div class="applicant-row-foot">
+        <span class="status-pill">${escapeHtml(application.status)}</span>
+        <span>${new Date(application.createdAt).toLocaleDateString("en-ZA")}</span>
+        <div class="admin-row-actions">${applicantFileLinks(application)}</div>
+      </div>
+      <div class="admin-row-actions">
+        <button class="secondary-btn admin-application-status" data-id="${application.id}" data-status="reviewed">Reviewed</button>
+        <button class="secondary-btn admin-application-status" data-id="${application.id}" data-status="shortlisted">Shortlist</button>
+        <button class="secondary-btn admin-application-status" data-id="${application.id}" data-status="contacted">Contacted</button>
+        <button class="secondary-btn admin-application-status" data-id="${application.id}" data-status="declined">Decline</button>
+      </div>
+    </div>
+  `).join("") || `<p>No applicants match the current filters.</p>`;
+}
+
+function renderAdminApplications() {
+  const body = $("#applicantHubBody");
+  if (!body) return;
+  const applications = filteredAdminApplications();
+  const query = adminApplicationExportQuery();
+  const xlsxLink = $("#applicationsExportLink");
+  const csvLink = $("#applicationsCsvLink");
+  if (xlsxLink) xlsxLink.href = `/api/admin/applications.xlsx?${query}`;
+  if (csvLink) csvLink.href = `/api/admin/applications.csv?${query}`;
+  const countLabel = $("#applicantCountLabel");
+  if (countLabel) countLabel.textContent = `${applications.length} applicant${applications.length === 1 ? "" : "s"}`;
+  body.innerHTML = `
+    <div class="province-breakdown">${provinceBreakdownHtml(applications)}</div>
+    <div class="admin-list applicant-list">${applicantRowsHtml(applications)}</div>
+  `;
+}
+
+function renderApplicantHub(data) {
+  const statusOptions = (state.meta.applicationStatuses || []).map((status) => `<option value="${status}">${status}</option>`).join("");
+  const typeOptions = (state.meta.opportunityTypes || []).map((type) => `<option value="${type.value}">${type.label}</option>`).join("");
+  const opportunityOptions = (data.opportunities || []).map((opportunity) => `<option value="${opportunity.id}">${escapeHtml(opportunity.title)}</option>`).join("");
+  return `
+    <div class="admin-card wide applicant-hub-card">
+      <div class="admin-card-head">
+        <div>
+          <h3>Applicant hub</h3>
+          <p id="applicantCountLabel">${(data.applications || []).length} applicants</p>
+        </div>
+        <div class="admin-row-actions">
+          <a id="applicationsExportLink" class="primary-btn" href="/api/admin/applications.xlsx" target="_blank" rel="noreferrer">Export Excel</a>
+          <a id="applicationsCsvLink" class="secondary-btn" href="/api/admin/applications.csv" target="_blank" rel="noreferrer">CSV</a>
+        </div>
+      </div>
+      <div class="applicant-filter-grid">
+        <input id="adminApplicantSearch" class="admin-applicant-filter" placeholder="Search applicants">
+        <select id="adminApplicantProvince" class="admin-applicant-filter" aria-label="Applicant province">
+          <option value="">All provinces</option>
+          ${state.meta.provinces.map((province) => `<option value="${province}">${province}</option>`).join("")}
+        </select>
+        <select id="adminApplicantType" class="admin-applicant-filter" aria-label="Opportunity type">
+          <option value="">All types</option>
+          ${typeOptions}
+        </select>
+        <select id="adminApplicantOpportunity" class="admin-applicant-filter" aria-label="Opportunity">
+          <option value="">All opportunities</option>
+          ${opportunityOptions}
+        </select>
+        <select id="adminApplicantStatus" class="admin-applicant-filter" aria-label="Application status">
+          <option value="">All statuses</option>
+          ${statusOptions}
+        </select>
+        <select id="adminApplicantSort" class="admin-applicant-filter" aria-label="Sort applicants">
+          <option value="newest">Newest first</option>
+          <option value="oldest">Oldest first</option>
+          <option value="province">Province</option>
+          <option value="opportunity">Opportunity</option>
+          <option value="status">Status</option>
+        </select>
+      </div>
+      <div id="applicantHubBody"></div>
+    </div>
+  `;
+}
+
+function renderOpportunityManager(data) {
+  const opportunityRows = (data.opportunities || []).map((opportunity) => `
+    <div class="admin-row">
+      <strong>${escapeHtml(opportunity.title)}</strong>
+      <small>${escapeHtml(opportunity.typeLabel)} - ${escapeHtml([opportunity.city, opportunity.province].filter(Boolean).join(", ") || "National")} - ${escapeHtml(opportunity.status)} - ${Number(opportunity.applicationCount || 0)} applicants</small>
+      <div class="admin-row-actions">
+        <button class="secondary-btn admin-opportunity-status" data-id="${opportunity.id}" data-status="open">Open</button>
+        <button class="secondary-btn admin-opportunity-status" data-id="${opportunity.id}" data-status="closed">Close</button>
+        <button class="secondary-btn admin-opportunity-status" data-id="${opportunity.id}" data-status="archived">Archive</button>
+      </div>
+    </div>
+  `).join("") || `<p>No opportunities created yet.</p>`;
+  return `
+    <div class="admin-card wide">
+      <h3>Opportunity listings</h3>
+      <form id="opportunityForm" class="opportunity-admin-form">
+        <input id="newOpportunityTitle" placeholder="Opportunity title" required>
+        <select id="newOpportunityType" required>
+          ${state.meta.opportunityTypes.map((type) => `<option value="${type.value}">${type.label}</option>`).join("")}
+        </select>
+        <select id="newOpportunityProvince">
+          <option value="">National</option>
+          ${state.meta.provinces.map((province) => `<option value="${province}">${province}</option>`).join("")}
+        </select>
+        <select id="newOpportunityCity">
+          <option value="">All cities/towns</option>
+          ${state.meta.cities.map((city) => `<option value="${city}">${city}</option>`).join("")}
+        </select>
+        <input id="newOpportunityClosingDate" type="date">
+        <textarea id="newOpportunitySummary" placeholder="Short description"></textarea>
+        <button class="primary-btn">Create opportunity</button>
+      </form>
+      <div class="admin-list">${opportunityRows}</div>
+    </div>
+  `;
+}
+
 async function renderAdmin() {
   if (state.user?.type !== "admin") {
-    $("#adminDashboard").innerHTML = `<div class="admin-card wide"><h3>Admin access</h3><p>Sign in with an administrator account to manage users, approvals, PRIME, revenue, reports, ads, and push notifications.</p></div>`;
+    $("#adminDashboard").innerHTML = `<div class="admin-card wide"><h3>Staff access</h3><p>Sign in with an administrator account to manage applicant records, opportunity listings, document downloads, and Excel exports.</p></div>`;
     return;
   }
   const data = await api("/api/admin");
+  state.adminData = data;
   const yocoStatus = data.paymentStatus || {};
+  const appStats = data.applicationStats || {};
+  $("#adminDashboard").innerHTML = `
+    <div class="admin-card"><h3>Applications</h3><h2>${appStats.total || 0}</h2><p>${appStats.byStatus?.new || 0} new applicants</p></div>
+    <div class="admin-card"><h3>Open opportunities</h3><h2>${data.analytics.opportunities || 0}</h2><p>${Object.keys(appStats.byProvince || {}).length} provinces represented</p></div>
+    <div class="admin-card"><h3>Shortlisted</h3><h2>${appStats.byStatus?.shortlisted || 0}</h2><p>Ready for next-stage review</p></div>
+    <div class="admin-card"><h3>Contacted</h3><h2>${appStats.byStatus?.contacted || 0}</h2><p>Applicants already contacted</p></div>
+    ${renderApplicantHub(data)}
+    ${renderOpportunityManager(data)}
+  `;
+  renderAdminApplications();
+  return;
   $("#adminDashboard").innerHTML = `
     <div class="admin-card"><h3>Revenue</h3><h2>${money(data.analytics.revenue)}</h2><p>${data.analytics.standardSubscribers || 0} Standard and ${data.analytics.primeSubscribers || 0} PRIME</p></div>
     <div class="admin-card"><h3>Listings</h3><h2>${data.analytics.activeListings || 0}</h2><p>${data.analytics.pendingBusinesses} businesses pending approval</p></div>
     <div class="admin-card"><h3>Users</h3><h2>${data.analytics.users}</h2><p>Customers, businesses, admins</p></div>
     <div class="admin-card"><h3>Quote requests</h3><h2>${data.analytics.quoteRequests}</h2><p>Tracked marketplace demand</p></div>
+    <div class="admin-card"><h3>Applications</h3><h2>${appStats.total || 0}</h2><p>${appStats.byStatus?.new || 0} new applicants</p></div>
+    <div class="admin-card"><h3>Open opportunities</h3><h2>${data.analytics.opportunities || 0}</h2><p>${Object.keys(appStats.byProvince || {}).length} provinces represented</p></div>
+    ${renderApplicantHub(data)}
+    ${renderOpportunityManager(data)}
     <div class="admin-card wide">
       <h3>Yoco payment health</h3>
       <p>Checkout: ${yocoStatus.checkoutConfigured ? "configured" : "not configured"} • Mode: ${escapeHtml(yocoStatus.keyMode || "unknown")} • Webhook secret: ${yocoStatus.webhookConfigured ? "configured" : "missing"} • Currency: ${escapeHtml(yocoStatus.currency || "ZAR")}</p>
@@ -863,6 +1205,7 @@ async function renderAdmin() {
       <div class="quote-list">${data.ads.map((ad) => `<div class="quote-item"><strong>${ad.title}</strong><small>${ad.placement} • ${ad.impressions} impressions • ${ad.clicks} clicks</small></div>`).join("")}</div>
     </div>
   `;
+  renderAdminApplications();
 }
 
 function connectEvents() {
@@ -886,6 +1229,11 @@ function connectEvents() {
     toast("Subscription status updated");
     await Promise.all([loadBusinesses(), loadMyBusinesses()]);
   });
+  events.addEventListener("application", async () => {
+    toast("New application received");
+    await loadOpportunities();
+    if (state.activePage === "admin" && state.user?.type === "admin") await renderAdmin();
+  });
 }
 
 document.addEventListener("click", async (event) => {
@@ -908,14 +1256,36 @@ document.addEventListener("click", async (event) => {
         await navigateTo("/admin");
         return;
       }
-      if (state.user.type !== "business") return toast("Use a business account to create a company profile.");
-      await openBusinessProfileDialog();
+      return toast("Admin access is required for the applicant hub.");
     }
     if (target.matches("[data-category]")) {
       $("#categoryFilter").value = target.dataset.category;
       syncSearchFilter("categoryFilter");
       await loadBusinesses();
       await navigateTo("/discover");
+    }
+    if (target.classList.contains("apply-opportunity")) {
+      openApplicationDialog(target.dataset.id);
+    }
+    if (target.id === "applicationNextBtn") {
+      validateApplicationDetails();
+      $("#applicationMessage").textContent = "";
+      setApplicationStep("files");
+    }
+    if (target.id === "applicationBackBtn") {
+      $("#applicationMessage").textContent = "";
+      setApplicationStep("details");
+    }
+    if (target.id === "submitApplicationBtn") {
+      target.disabled = true;
+      target.textContent = "Submitting...";
+      $("#applicationMessage").textContent = "Uploading application...";
+      try {
+        await submitApplication();
+      } finally {
+        target.disabled = false;
+        target.textContent = "Submit application";
+      }
     }
     if (target.classList.contains("view-profile")) {
       event.preventDefault();
@@ -992,6 +1362,16 @@ document.addEventListener("click", async (event) => {
       await Promise.all([loadBusinesses(), loadMyBusinesses()]);
       toast("Subscription status updated");
     }
+    if (target.classList.contains("admin-application-status")) {
+      await api("/api/admin/applications/status", { method: "POST", body: JSON.stringify({ applicationId: target.dataset.id, status: target.dataset.status }) });
+      await renderAdmin();
+      toast("Application status updated");
+    }
+    if (target.classList.contains("admin-opportunity-status")) {
+      await api("/api/admin/opportunities/status", { method: "POST", body: JSON.stringify({ opportunityId: target.dataset.id, status: target.dataset.status }) });
+      await Promise.all([renderAdmin(), loadOpportunities()]);
+      toast("Opportunity status updated");
+    }
     if (target.id === "checkYocoDiagnostics") {
       await loadYocoDiagnostics();
     }
@@ -1025,12 +1405,30 @@ $("#discoverSearch").addEventListener("submit", async (event) => {
   await navigateTo("/discover");
 });
 
+$("#opportunitySearch").addEventListener("submit", async (event) => {
+  event.preventDefault();
+  await loadOpportunities();
+  await navigateTo("/opportunities");
+});
+
 ["searchInput", "discoverSearchInput", "provinceFilter", "discoverProvinceFilter", "categoryFilter", "discoverCategoryFilter", "heroCityFilter", "cityFilter", "ratingFilter", "primeFilter", "priceFilter"].forEach((id) => {
   $(`#${id}`).addEventListener("input", () => {
     if (["searchInput", "discoverSearchInput", "provinceFilter", "discoverProvinceFilter", "categoryFilter", "discoverCategoryFilter"].includes(id)) syncSearchFilter(id);
     if (id === "heroCityFilter" || id === "cityFilter") syncCityFilter(id);
     loadBusinesses().catch((error) => toast(error.message));
   });
+});
+
+["opportunitySearchInput", "opportunityTypeFilter", "opportunityProvinceFilter", "opportunityCityFilter"].forEach((id) => {
+  $(`#${id}`).addEventListener("input", () => {
+    loadOpportunities().catch((error) => toast(error.message));
+  });
+});
+
+document.addEventListener("input", (event) => {
+  if (event.target.classList.contains("admin-applicant-filter")) {
+    renderAdminApplications();
+  }
 });
 
 $("#nearbyBtn").addEventListener("click", async () => {
@@ -1311,7 +1709,76 @@ document.addEventListener("submit", async (event) => {
     await renderAdmin();
     toast("Advertisement created");
   }
+
+  if (event.target.id === "opportunityForm") {
+    event.preventDefault();
+    await api("/api/admin/opportunities", {
+      method: "POST",
+      body: JSON.stringify({
+        title: $("#newOpportunityTitle").value,
+        type: $("#newOpportunityType").value,
+        province: $("#newOpportunityProvince").value,
+        city: $("#newOpportunityCity").value,
+        closingDate: $("#newOpportunityClosingDate").value,
+        summary: $("#newOpportunitySummary").value,
+        status: "open"
+      })
+    });
+    await Promise.all([renderAdmin(), loadOpportunities()]);
+    toast("Opportunity created");
+  }
 });
+
+function initLinearInteractions() {
+  const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const spotlightSelector = [
+    ".opportunity-card",
+    ".business-card",
+    ".admin-card",
+    ".modal-card",
+    ".quote-item",
+    ".admin-row",
+    ".conversation-list",
+    ".chat-panel",
+    ".quote-panel",
+    ".profile-card",
+    ".hero-image-placeholder",
+    ".hero-search",
+    ".page-search",
+    ".success-card"
+  ].join(",");
+
+  function attachSpotlights(root = document) {
+    root.querySelectorAll(spotlightSelector).forEach((node) => {
+      if (node.dataset.linearSpotlight === "true") return;
+      node.dataset.linearSpotlight = "true";
+      node.classList.add("linear-spotlight");
+      node.addEventListener("pointermove", (event) => {
+        const rect = node.getBoundingClientRect();
+        node.style.setProperty("--spotlight-x", `${event.clientX - rect.left}px`);
+        node.style.setProperty("--spotlight-y", `${event.clientY - rect.top}px`);
+      });
+    });
+  }
+
+  attachSpotlights();
+  new MutationObserver((mutations) => {
+    mutations.forEach((mutation) => {
+      mutation.addedNodes.forEach((node) => {
+        if (node.nodeType === Node.ELEMENT_NODE) attachSpotlights(node);
+      });
+    });
+  }).observe(document.body, { childList: true, subtree: true });
+
+  if (!reduceMotion) {
+    const updateHeroProgress = () => {
+      const progress = Math.min(1, Math.max(0, window.scrollY / 520));
+      document.documentElement.style.setProperty("--hero-progress", progress.toFixed(3));
+    };
+    updateHeroProgress();
+    window.addEventListener("scroll", updateHeroProgress, { passive: true });
+  }
+}
 
 if ("serviceWorker" in navigator) {
   navigator.serviceWorker.register("/sw.js").catch(() => {});
@@ -1319,4 +1786,5 @@ if ("serviceWorker" in navigator) {
 
 window.addEventListener("popstate", () => applyRoute().catch((error) => toast(error.message)));
 
+initLinearInteractions();
 boot();

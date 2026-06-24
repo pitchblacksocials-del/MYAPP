@@ -1,14 +1,14 @@
 {
-  "name": "Connect-ZA",
-  "short_name": "Connect-ZA",
-  "description": "Connecting Professionals across South Africa.",
+  "name": "Opportunity Hub",
+  "short_name": "Opportunity Hub",
+  "description": "Applicant intake for training, work, enterprise development, and supplier development opportunities.",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#151d18",
-  "theme_color": "#d98c47",
+  "background_color": "#050506",
+  "theme_color": "#5E6AD2",
   "icons": [
     {
-      "src": "/icons/icon.svg",
+      "src": "/icons/opportunity-icon.svg",
       "sizes": "any",
       "type": "image/svg+xml"
     }

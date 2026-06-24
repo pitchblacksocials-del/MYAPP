@@ -3,39 +3,38 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="theme-color" content="#151d18">
-  <meta name="description" content="Connect-ZA connects customers with trusted South African businesses and service providers.">
-  <title>Connect-ZA | Connecting Professionals</title>
-  <link rel="icon" href="/icons/icon.svg" type="image/svg+xml">
+  <meta name="theme-color" content="#050506">
+  <meta name="description" content="Opportunity Hub lets applicants apply for training, work, enterprise development, and supplier development opportunities.">
+  <title>Opportunity Hub | Applicant Intake</title>
+  <link rel="icon" href="/icons/opportunity-icon.svg" type="image/svg+xml">
   <link rel="manifest" href="/manifest.webmanifest">
-  <link rel="stylesheet" href="/styles.css?v=yoco-secret-db-1">
+  <link rel="stylesheet" href="/styles.css?v=linear-modern-1">
 </head>
 <body>
   <header class="app-header">
-    <a class="brand" href="/" data-route="home" aria-label="Connect-ZA home">
-      <img class="brand-logo" src="/icons/connect-za-logo.svg" alt="Connect-ZA - Connecting Professionals" width="215" height="48">
+    <a class="brand" href="/opportunities" data-route="opportunities" aria-label="Opportunity Hub home">
+      <img class="brand-logo" src="/icons/opportunity-hub-logo.svg" alt="Opportunity Hub - Applicant intake platform" width="248" height="56">
     </a>
     <nav class="desktop-nav">
-      <a href="/discover" data-route="discover">Discover</a>
-      <a href="/plans" data-route="plans">Plans</a>
-      <a href="/legal.html">Legal</a>
+      <a href="/opportunities" data-route="opportunities">Opportunities</a>
+      <a href="/admin" data-route="admin">Applicant hub</a>
     </nav>
     <div class="header-actions">
       <button id="themeToggle" class="icon-btn" title="Toggle dark mode">◐</button>
-      <button id="openAuth" class="secondary-btn">Sign in</button>
-      <button id="openBusiness" class="primary-btn">List Business</button>
+      <button id="openAuth" class="secondary-btn">Staff sign in</button>
+      <button id="openBusiness" class="primary-btn">Admin hub</button>
     </div>
   </header>
 
   <main>
     <section id="home" class="hero-section">
       <div class="hero-copy">
-        <p class="eyebrow">South Africa's professional marketplace</p>
-        <h1>Find trusted companies, compare quotes, and chat instantly.</h1>
-        <p class="hero-text">Find verified South African service providers, compare quotes, and connect fast.</p>
+        <p class="eyebrow">Applicant intake platform</p>
+        <h1>Apply for training, work, enterprise and supplier development.</h1>
+        <p class="hero-text">Submit your details, CV, and certificates for the opportunity that matches you.</p>
         <div class="hero-actions">
-          <a class="primary-btn hero-cta" href="/discover" data-route="discover">Explore businesses</a>
-          <a class="secondary-btn hero-cta" href="/plans" data-route="plans">View plans</a>
+          <a class="primary-btn hero-cta" href="/opportunities" data-route="opportunities">View opportunities</a>
+          <a class="secondary-btn hero-cta" href="/admin" data-route="admin">Staff dashboard</a>
         </div>
         <form id="heroSearch" class="hero-search">
           <input id="searchInput" type="search" placeholder="Search service, company, city..." autocomplete="off">
@@ -44,21 +43,21 @@
           <select id="categoryFilter" aria-label="Category"></select>
           <button class="primary-btn" type="submit">Search</button>
         </form>
-        <div class="hero-stats" aria-label="Marketplace statistics">
-          <span><strong id="statBusinesses">0</strong> businesses</span>
-          <span><strong>R150</strong> Standard / <strong>R250</strong> PRIME</span>
+        <div class="hero-stats" aria-label="Opportunity statistics">
+          <span><strong>4</strong> intake types</span>
+          <span><strong>CV</strong> and certificates</span>
           <span><strong>9</strong> provinces</span>
         </div>
       </div>
-      <div class="hero-panel" aria-label="Marketplace image placeholder">
+      <div class="hero-panel" aria-label="Applicant dashboard preview">
         <div class="hero-image-placeholder">
           <div class="image-placeholder-grid"></div>
           <div class="image-placeholder-copy">
-            <span>Image placeholder</span>
-            <strong>South African business marketplace</strong>
-            <small>Use a real project, team, or service photo here.</small>
+            <span>Live intake</span>
+            <strong>Applications sorted by province</strong>
+            <small>Excel-ready records for quick communication.</small>
           </div>
-          <div class="placeholder-chip prime-badge">PRIME ready</div>
+          <div class="placeholder-chip prime-badge">Excel export</div>
         </div>
       </div>
     </section>
@@ -66,19 +65,37 @@
     <section class="onboarding-strip hidden" aria-label="Onboarding">
       <article>
         <span>1</span>
-        <strong>Create your account</strong>
-        <p>Customers browse and request quotes. Businesses register, submit verification documents, and build profiles.</p>
+        <strong>Choose an opportunity</strong>
+        <p>Applicants browse training, work, enterprise, and supplier development intakes.</p>
       </article>
       <article>
         <span>2</span>
-        <strong>Connect instantly</strong>
-        <p>Use WhatsApp, in-app chat, phone calls, quote files, image sharing, and live notifications.</p>
+        <strong>Submit documents</strong>
+        <p>Each application captures contact details, location, CV, and certificates.</p>
       </article>
       <article>
         <span>3</span>
-        <strong>Choose a plan</strong>
-        <p>Standard businesses list normally for R150/month. PRIME businesses rank first for R250/month.</p>
+        <strong>Review centrally</strong>
+        <p>Staff sort applicants by opportunity, province, and application status.</p>
       </article>
+    </section>
+
+    <section id="opportunities" class="section hidden">
+      <div class="section-heading">
+        <div>
+          <p class="eyebrow">Opportunities</p>
+          <h2>Open intakes</h2>
+        </div>
+        <a class="secondary-btn" href="/admin" data-route="admin">Applicant hub</a>
+      </div>
+      <form id="opportunitySearch" class="page-search">
+        <input id="opportunitySearchInput" type="search" placeholder="Search opportunity, city, province..." autocomplete="off">
+        <select id="opportunityTypeFilter" aria-label="Opportunity type"></select>
+        <select id="opportunityProvinceFilter" aria-label="Province"></select>
+        <select id="opportunityCityFilter" aria-label="City or town"></select>
+        <button class="primary-btn" type="submit">Search</button>
+      </form>
+      <div id="opportunityGrid" class="opportunity-grid"></div>
     </section>
 
     <section id="discover" class="section hidden">
@@ -191,7 +208,7 @@
       <div class="section-heading">
         <div>
           <p class="eyebrow">Admin</p>
-          <h2>Marketplace operations</h2>
+          <h2>Applicant operations</h2>
         </div>
         <button id="refreshAdmin" class="secondary-btn">Refresh dashboard</button>
       </div>
@@ -201,28 +218,24 @@
 
   <footer class="legal-footer" id="legal">
     <div class="footer-brand">
-      <strong>Connect-ZA</strong>
-      <span>Connecting Professionals across South Africa</span>
+      <strong>Opportunity Hub</strong>
+      <span>Applicant intake and development opportunity management</span>
     </div>
     <nav class="legal-links" aria-label="Legal links">
-      <a href="/legal.html#popia">POPIA and privacy</a>
-      <a href="/legal.html#terms">Terms and conditions</a>
-      <a href="/legal.html#requirements">Legal requirements</a>
-      <a href="/legal.html#subscriptions">Subscription terms</a>
-      <a href="/legal.html#reviews">Reviews policy</a>
-      <a href="/legal.html#resources">Official resources</a>
-      <a href="mailto:privacy@connect-za.com">Privacy requests</a>
-      <a href="mailto:support@connect-za.com">Report abuse</a>
+      <a href="/opportunities" data-route="opportunities">Open opportunities</a>
+      <a href="/admin" data-route="admin">Applicant hub</a>
+      <a href="mailto:applications@example.com">Applications support</a>
+      <a href="mailto:privacy@example.com">Privacy requests</a>
     </nav>
   </footer>
 
   <dialog id="authDialog" class="modal">
     <form method="dialog" class="modal-card">
-      <button class="close-btn" value="cancel">×</button>
-      <h2>Welcome to Connect-ZA</h2>
+      <button class="close-btn" value="cancel">&times;</button>
+      <h2>Staff access</h2>
       <div class="tabs">
         <button type="button" class="tab active" data-auth-tab="login">Sign in</button>
-        <button type="button" class="tab" data-auth-tab="register">Create account</button>
+        <button type="button" class="tab hidden" data-auth-tab="register">Create account</button>
         <button type="button" class="tab" data-auth-tab="reset">Reset</button>
       </div>
       <div id="authLogin" class="auth-pane">
@@ -246,6 +259,50 @@
         <button id="resetBtn" type="button" class="primary-btn">Send reset link</button>
       </div>
       <p id="authMessage" class="form-message"></p>
+    </form>
+  </dialog>
+
+  <dialog id="applicationDialog" class="modal">
+    <form method="dialog" class="modal-card application-modal">
+      <button class="close-btn" value="cancel">×</button>
+      <div class="application-dialog-head">
+        <p class="eyebrow" id="applicationTypeLabel">Application</p>
+        <h2 id="applicationTitle">Opportunity application</h2>
+      </div>
+      <div class="application-steps" aria-label="Application progress">
+        <span id="applicationStepOne" class="active">1</span>
+        <span id="applicationStepTwo">2</span>
+      </div>
+      <div id="applicationDetailsStep" class="application-pane">
+        <div class="application-form-grid">
+          <input id="applicantFirstName" placeholder="Name" autocomplete="given-name">
+          <input id="applicantSurname" placeholder="Surname" autocomplete="family-name">
+          <input id="applicantEmail" type="email" placeholder="Email" autocomplete="email">
+          <input id="applicantPhone" placeholder="Phone / WhatsApp" autocomplete="tel">
+          <select id="applicantProvince" aria-label="Province"></select>
+          <select id="applicantCity" aria-label="City or town"></select>
+          <textarea id="applicantNotes" placeholder="Short note"></textarea>
+        </div>
+        <button id="applicationNextBtn" type="button" class="primary-btn">Next</button>
+      </div>
+      <div id="applicationFilesStep" class="application-pane hidden">
+        <fieldset class="verification-docs">
+          <legend>Applicant documents</legend>
+          <label>
+            <span>CV</span>
+            <input id="applicantCv" type="file" accept=".pdf,.doc,.docx,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document">
+          </label>
+          <label>
+            <span>Certificates</span>
+            <input id="applicantCertificates" type="file" multiple accept=".pdf,.doc,.docx,image/*,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document">
+          </label>
+        </fieldset>
+        <div class="application-actions">
+          <button id="applicationBackBtn" type="button" class="secondary-btn">Back</button>
+          <button id="submitApplicationBtn" type="button" class="primary-btn">Submit application</button>
+        </div>
+      </div>
+      <p id="applicationMessage" class="form-message"></p>
     </form>
   </dialog>
 
@@ -307,6 +364,6 @@
   </dialog>
 
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
-  <script src="/app.js?v=yoco-secret-db-1"></script>
+  <script src="/app.js?v=linear-modern-1"></script>
 </body>
 </html>

@@ -4,6 +4,12 @@ const path = require("path");
 const crypto = require("crypto");
 const url = require("url");
 const { Pool } = require("pg");
+let ExcelJS = null;
+try {
+  ExcelJS = require("exceljs");
+} catch {
+  ExcelJS = null;
+}
 
 function loadEnvFile() {
   const envPath = path.join(__dirname, ".env");
@@ -74,6 +80,8 @@ const SUBSCRIPTION_PLANS = {
 const SUBSCRIPTION_STATUSES = ["active", "pending", "inactive", "suspended"];
 const MAX_PROJECTS = 3;
 const MAX_PROJECT_PHOTOS = 5;
+const MAX_APPLICATION_CERTIFICATES = 6;
+const MAX_APPLICATION_FILE_BYTES = 10 * 1024 * 1024;
 
 const categories = [
   "Construction",
@@ -206,8 +214,39 @@ const cities = [
   "Worcester"
 ];
 
+const opportunityTypes = [
+  { value: "training", label: "Training" },
+  { value: "work", label: "Work opportunity" },
+  { value: "enterprise", label: "Enterprise development" },
+  { value: "supplier", label: "Supplier development" }
+];
+
+const applicationStatuses = ["new", "reviewed", "shortlisted", "contacted", "declined"];
+
 function canonicalFromList(value, list) {
   return list.find((item) => item.toLowerCase() === String(value || "").trim().toLowerCase()) || "";
+}
+
+function cleanText(value, max = 500) {
+  return String(value || "").replace(/\s+/g, " ").trim().slice(0, max);
+}
+
+function cleanMultiline(value, max = 1200) {
+  return String(value || "").replace(/\r\n/g, "\n").trim().slice(0, max);
+}
+
+function opportunityTypeKey(value, fallback = "training") {
+  const key = String(value || "").toLowerCase();
+  return opportunityTypes.some((item) => item.value === key) ? key : fallback;
+}
+
+function opportunityTypeLabel(value) {
+  return opportunityTypes.find((item) => item.value === opportunityTypeKey(value))?.label || "Training";
+}
+
+function opportunityStatus(value, fallback = "open") {
+  const status = String(value || "").toLowerCase();
+  return ["open", "closed", "archived"].includes(status) ? status : fallback;
 }
 
 function normalizeBusinessProjects(projectsInput = [], galleryInput = []) {
@@ -627,7 +666,7 @@ function bootstrapUsers() {
     {
       id: uid("usr"),
       type: "admin",
-      name: process.env.ADMIN_NAME || "Connect-ZA Admin",
+      name: process.env.ADMIN_NAME || "Opportunity Hub Admin",
       email,
       phone: process.env.ADMIN_PHONE || "",
       passwordHash: hashPassword(process.env.ADMIN_PASSWORD),
@@ -647,6 +686,146 @@ function ensureBootstrapAdmin(db) {
   return true;
 }
 
+function starterOpportunities() {
+  const createdAt = new Date().toISOString();
+  return [
+    {
+      id: "opp_training_general",
+      type: "training",
+      title: "Training Programme Intake",
+      summary: "Skills development training intake for applicants who want to build workplace-ready experience.",
+      province: "",
+      city: "",
+      closingDate: "",
+      status: "open",
+      createdAt
+    },
+    {
+      id: "opp_work_general",
+      type: "work",
+      title: "Work Opportunity Intake",
+      summary: "Work placement and employment opportunity intake for applicants ready to be considered by the team.",
+      province: "",
+      city: "",
+      closingDate: "",
+      status: "open",
+      createdAt
+    },
+    {
+      id: "opp_enterprise_general",
+      type: "enterprise",
+      title: "Enterprise Development Intake",
+      summary: "Enterprise development intake for small businesses and entrepreneurs seeking support.",
+      province: "",
+      city: "",
+      closingDate: "",
+      status: "open",
+      createdAt
+    },
+    {
+      id: "opp_supplier_general",
+      type: "supplier",
+      title: "Supplier Development Intake",
+      summary: "Supplier development intake for businesses interested in supplier readiness and growth opportunities.",
+      province: "",
+      city: "",
+      closingDate: "",
+      status: "open",
+      createdAt
+    }
+  ];
+}
+
+function sanitizeOpportunity(input = {}, existing = null) {
+  const title = cleanText(input.title ?? existing?.title, 120);
+  if (!title) {
+    const error = new Error("Opportunity title is required.");
+    error.statusCode = 400;
+    throw error;
+  }
+  const type = opportunityTypeKey(input.type ?? existing?.type);
+  const province = input.province ? canonicalFromList(input.province, provinces) : "";
+  const city = input.city ? canonicalFromList(input.city, cities) : "";
+  if (input.province && !province) {
+    const error = new Error("Please select one of South Africa's nine provinces.");
+    error.statusCode = 400;
+    throw error;
+  }
+  if (input.city && !city) {
+    const error = new Error("Please select a South African city or town from the list.");
+    error.statusCode = 400;
+    throw error;
+  }
+  const closingDate = /^\d{4}-\d{2}-\d{2}$/.test(String(input.closingDate || "")) ? String(input.closingDate) : "";
+  return {
+    ...(existing || {}),
+    type,
+    title,
+    summary: cleanMultiline(input.summary ?? existing?.summary, 900),
+    province,
+    city,
+    closingDate,
+    status: opportunityStatus(input.status ?? existing?.status),
+    updatedAt: new Date().toISOString()
+  };
+}
+
+function normalizeOpportunitiesAndApplications(db) {
+  let changed = false;
+  if (!Array.isArray(db.opportunities)) {
+    db.opportunities = starterOpportunities();
+    changed = true;
+  }
+  if (!db.opportunities.length) {
+    db.opportunities = starterOpportunities();
+    changed = true;
+  }
+  if (!Array.isArray(db.applications)) {
+    db.applications = [];
+    changed = true;
+  }
+
+  for (const opportunity of db.opportunities) {
+    const normalizedType = opportunityTypeKey(opportunity.type);
+    const normalizedStatus = opportunityStatus(opportunity.status);
+    if (opportunity.type !== normalizedType) {
+      opportunity.type = normalizedType;
+      changed = true;
+    }
+    if (opportunity.status !== normalizedStatus) {
+      opportunity.status = normalizedStatus;
+      changed = true;
+    }
+    if (!opportunity.createdAt) {
+      opportunity.createdAt = new Date().toISOString();
+      changed = true;
+    }
+    opportunity.summary = cleanMultiline(opportunity.summary, 900);
+  }
+
+  for (const application of db.applications) {
+    const normalizedStatus = applicationStatuses.includes(application.status) ? application.status : "new";
+    if (application.status !== normalizedStatus) {
+      application.status = normalizedStatus;
+      changed = true;
+    }
+    application.documents ||= {};
+    if (!Array.isArray(application.documents.certificates)) {
+      application.documents.certificates = [];
+      changed = true;
+    }
+    if (!application.createdAt) {
+      application.createdAt = new Date().toISOString();
+      changed = true;
+    }
+  }
+
+  db.analytics ||= {};
+  db.analytics.applications = db.applications.length;
+  db.analytics.opportunities = db.opportunities.filter((item) => item.status === "open").length;
+  return changed;
+}
+
 function seedDb() {
   return {
     users: bootstrapUsers(),
@@ -655,6 +834,8 @@ function seedDb() {
     reviews: [],
     quotes: [],
     conversations: [],
+    opportunities: starterOpportunities(),
+    applications: [],
     notifications: [],
     ads: [],
     paymentEvents: [],
@@ -664,10 +845,12 @@ function seedDb() {
       primeSubscribers: 0,
       subscriptionRevenue: 0,
       quoteRequests: 0,
+      applications: 0,
+      opportunities: 4,
       monthlyVisitors: 0
     },
     settings: {
-      slogan: "Connecting Professionals",
+      slogan: "Applicant Intake Platform",
       standardMonthlyPrice: 150,
       primeMonthlyPrice: 250
     }
@@ -816,6 +999,8 @@ function extensionForMime(contentType, fallbackName = "") {
     "image/webp": "webp",
     "image/gif": "gif",
     "application/pdf": "pdf",
+    "application/msword": "doc",
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document": "docx",
     "video/mp4": "mp4",
     "audio/mpeg": "mp3",
     "audio/webm": "webm"
@@ -964,6 +1149,430 @@ async function prepareQuoteFiles(files, quoteId, businessId) {
   return uploaded.filter(Boolean);
 }
 
+function validateApplicationFile(file, label) {
+  if (!file?.data || !isDataUrl(file.data)) {
+    const error = new Error(`${label} must be uploaded as a PDF, Word document, or image.`);
+    error.statusCode = 400;
+    throw error;
+  }
+  const parsed = parseDataUrl(file.data, file.name || label);
+  if (!parsed) {
+    const error = new Error(`${label} could not be read.`);
+    error.statusCode = 400;
+    throw error;
+  }
+  if (parsed.buffer.length > MAX_APPLICATION_FILE_BYTES) {
+    const error = new Error(`${file.name || label} is too large. Please use files smaller than 10MB each.`);
+    error.statusCode = 413;
+    throw error;
+  }
+  const allowed = new Set([
+    "application/pdf",
+    "application/msword",
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    "image/jpeg",
+    "image/png",
+    "image/webp"
+  ]);
+  const contentType = String(file.type || parsed.contentType || "").toLowerCase();
+  if (!allowed.has(contentType)) {
+    const error = new Error(`${file.name || label} must be a PDF, Word document, JPG, PNG, or WebP file.`);
+    error.statusCode = 400;
+    throw error;
+  }
+  return parsed;
+}
+
+async function uploadPrivateApplicationAsset(value, applicationId, folder, fallbackName) {
+  if (!value || (typeof value === "object" && value.path && value.bucket)) return value || null;
+  const file = typeof value === "object" ? value : { data: value, name: fallbackName };
+  const parsed = validateApplicationFile(file, fallbackName);
+  const ext = extensionForMime(file.type || parsed.contentType, file.name);
+  const fileId = uid("file");
+  const storagePath = [
+    "applications",
+    cleanStorageSegment(applicationId, "application"),
+    cleanStorageSegment(folder, "documents"),
+    `${Date.now()}-${crypto.randomBytes(5).toString("hex")}.${ext}`
+  ].join("/");
+  const uploaded = await uploadSupabaseObject({
+    bucket: SUPABASE_PRIVATE_STORAGE_BUCKET,
+    storagePath,
+    buffer: parsed.buffer,
+    contentType: file.type || parsed.contentType
+  });
+  const base = {
+    id: fileId,
+    name: cleanText(file.name || `${fallbackName}.${ext}`, 180),
+    type: file.type || parsed.contentType,
+    size: parsed.buffer.length,
+    uploadedAt: new Date().toISOString()
+  };
+  if (!uploaded) return { ...base, data: file.data };
+  return {
+    ...base,
+    bucket: uploaded.bucket,
+    path: uploaded.path
+  };
+}
+
+async function prepareApplicationUploads(input, applicationId) {
+  const certificates = Array.isArray(input.certificates) ? input.certificates.slice(0, MAX_APPLICATION_CERTIFICATES) : [];
+  const documents = {
+    cv: await uploadPrivateApplicationAsset(input.cv, applicationId, "cv", "cv"),
+    certificates: []
+  };
+  for (let index = 0; index < certificates.length; index += 1) {
+    documents.certificates.push(await uploadPrivateApplicationAsset(certificates[index], applicationId, "certificates", `certificate-${index + 1}`));
+  }
+  documents.certificates = documents.certificates.filter(Boolean);
+  return documents;
+}
+
+function publicOpportunity(opportunity, db = null) {
+  const applicationCount = db ? (db.applications || []).filter((item) => item.opportunityId === opportunity.id).length : 0;
+  return {
+    id: opportunity.id,
+    type: opportunityTypeKey(opportunity.type),
+    typeLabel: opportunityTypeLabel(opportunity.type),
+    title: opportunity.title,
+    summary: opportunity.summary || "",
+    province: opportunity.province || "",
+    city: opportunity.city || "",
+    closingDate: opportunity.closingDate || "",
+    status: opportunityStatus(opportunity.status),
+    applicationCount,
+    createdAt: opportunity.createdAt || ""
+  };
+}
+
+function fileSummary(applicationId, file) {
+  if (!file) return null;
+  return {
+    id: file.id || "",
+    name: file.name || "document",
+    type: file.type || "application/octet-stream",
+    size: Number(file.size || 0),
+    uploadedAt: file.uploadedAt || "",
+    downloadUrl: file.id ? `/api/admin/applications/${encodeURIComponent(applicationId)}/files/${encodeURIComponent(file.id)}` : ""
+  };
+}
+
+function publicApplication(application, db = null) {
+  const opportunity = db?.opportunities?.find((item) => item.id === application.opportunityId);
+  return {
+    id: application.id,
+    opportunityId: application.opportunityId,
+    opportunityTitle: opportunity?.title || application.opportunityTitle || "Opportunity",
+    opportunityType: opportunityTypeKey(opportunity?.type || application.opportunityType),
+    opportunityTypeLabel: opportunityTypeLabel(opportunity?.type || application.opportunityType),
+    firstName: application.firstName,
+    surname: application.surname,
+    fullName: `${application.firstName || ""} ${application.surname || ""}`.trim(),
+    email: application.email,
+    phone: application.phone,
+    city: application.city,
+    province: application.province,
+    notes: application.notes || "",
+    status: application.status || "new",
+    createdAt: application.createdAt,
+    updatedAt: application.updatedAt || "",
+    documents: {
+      cv: fileSummary(application.id, application.documents?.cv),
+      certificates: (application.documents?.certificates || []).map((file) => fileSummary(application.id, file)).filter(Boolean)
+    }
+  };
+}
+
+function applicationStats(db) {
+  const stats = {
+    total: 0,
+    byProvince: {},
+    byType: {},
+    byStatus: {},
+    byOpportunity: {}
+  };
+  for (const application of db.applications || []) {
+    const opportunity = (db.opportunities || []).find((item) => item.id === application.opportunityId);
+    const province = application.province || "Not set";
+    const type = opportunityTypeLabel(opportunity?.type || application.opportunityType);
+    const status = application.status || "new";
+    const opportunityTitle = opportunity?.title || application.opportunityTitle || "Opportunity";
+    stats.total += 1;
+    stats.byProvince[province] = (stats.byProvince[province] || 0) + 1;
+    stats.byType[type] = (stats.byType[type] || 0) + 1;
+    stats.byStatus[status] = (stats.byStatus[status] || 0) + 1;
+    stats.byOpportunity[opportunityTitle] = (stats.byOpportunity[opportunityTitle] || 0) + 1;
+  }
+  return stats;
+}
+
+function applicationRows(db, filters = {}) {
+  const q = String(filters.q || "").trim().toLowerCase();
+  const province = String(filters.province || "");
+  const type = String(filters.type || "");
+  const status = String(filters.status || "");
+  const opportunityId = String(filters.opportunityId || "");
+  return (db.applications || [])
+    .map((application) => publicApplication(application, db))
+    .filter((application) => !q || [
+      application.fullName,
+      application.email,
+      application.phone,
+      application.city,
+      application.province,
+      application.opportunityTitle,
+      application.opportunityTypeLabel
+    ].join(" ").toLowerCase().includes(q))
+    .filter((application) => !province || application.province === province)
+    .filter((application) => !type || application.opportunityType === type)
+    .filter((application) => !status || application.status === status)
+    .filter((application) => !opportunityId || application.opportunityId === opportunityId)
+    .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+}
+
+function exportRowsForApplications(applications) {
+  return applications.map((application) => ({
+    "Applied At": application.createdAt,
+    "Status": application.status,
+    "Opportunity Type": application.opportunityTypeLabel,
+    "Opportunity": application.opportunityTitle,
+    "First Name": application.firstName,
+    "Surname": application.surname,
+    "Full Name": application.fullName,
+    "Phone": application.phone,
+    "Email": application.email,
+    "City": application.city,
+    "Province": application.province,
+    "Notes": application.notes,
+    "CV File": application.documents.cv?.name || "",
+    "Certificate Files": (application.documents.certificates || []).map((file) => file.name).join(", ")
+  }));
+}
+
+function communicationRowsForApplications(applications) {
+  return applications.map((application) => ({
+    "Full Name": application.fullName,
+    "Phone": application.phone,
+    "Email": application.email,
+    "Province": application.province,
+    "City": application.city,
+    "Opportunity": application.opportunityTitle,
+    "Status": application.status
+  }));
+}
+
+function countRowsFromMap(map) {
+  return Object.entries(map).sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])).map(([name, count]) => ({
+    name,
+    count
+  }));
+}
+
+function publicApplicationStats(applications) {
+  const stats = {
+    byProvince: {},
+    byType: {},
+    byStatus: {},
+    byOpportunity: {}
+  };
+  for (const application of applications) {
+    stats.byProvince[application.province || "Not set"] = (stats.byProvince[application.province || "Not set"] || 0) + 1;
+    stats.byType[application.opportunityTypeLabel || "Opportunity"] = (stats.byType[application.opportunityTypeLabel || "Opportunity"] || 0) + 1;
+    stats.byStatus[application.status || "new"] = (stats.byStatus[application.status || "new"] || 0) + 1;
+    stats.byOpportunity[application.opportunityTitle || "Opportunity"] = (stats.byOpportunity[application.opportunityTitle || "Opportunity"] || 0) + 1;
+  }
+  return stats;
+}
+
+function styleWorksheet(worksheet) {
+  const header = worksheet.getRow(1);
+  header.font = { bold: true, color: { argb: "FFFFFFFF" } };
+  header.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF2D3A31" } };
+  header.alignment = { vertical: "middle" };
+  header.height = 22;
+  worksheet.views = [{ state: "frozen", ySplit: 1 }];
+  worksheet.autoFilter = {
+    from: { row: 1, column: 1 },
+    to: { row: 1, column: worksheet.columnCount }
+  };
+  worksheet.eachRow((row, rowNumber) => {
+    if (rowNumber === 1) return;
+    row.alignment = { vertical: "top", wrapText: true };
+  });
+}
+
+function addWorkbookSheet(workbook, name, columns, rows) {
+  const worksheet = workbook.addWorksheet(name);
+  worksheet.columns = columns.map((column) => ({
+    header: column.header,
+    key: column.key,
+    width: column.width
+  }));
+  rows.forEach((row) => worksheet.addRow(row));
+  styleWorksheet(worksheet);
+  return worksheet;
+}
+
+async function buildApplicationsWorkbook(db, filters = {}) {
+  if (!ExcelJS) {
+    const error = new Error("Excel export is not installed. Run npm install to install the exceljs package.");
+    error.statusCode = 503;
+    throw error;
+  }
+  const applications = applicationRows(db, filters);
+  const stats = publicApplicationStats(applications);
+  const workbook = new ExcelJS.Workbook();
+  workbook.creator = "Opportunity Hub";
+  workbook.created = new Date();
+  workbook.modified = new Date();
+
+  addWorkbookSheet(workbook, "Applications", [
+    { header: "Applied At", key: "appliedAt", width: 22 },
+    { header: "Status", key: "status", width: 14 },
+    { header: "Opportunity Type", key: "opportunityType", width: 24 },
+    { header: "Opportunity", key: "opportunity", width: 34 },
+    { header: "First Name", key: "firstName", width: 18 },
+    { header: "Surname", key: "surname", width: 18 },
+    { header: "Full Name", key: "fullName", width: 26 },
+    { header: "Phone", key: "phone", width: 18 },
+    { header: "Email", key: "email", width: 28 },
+    { header: "City", key: "city", width: 18 },
+    { header: "Province", key: "province", width: 18 },
+    { header: "Notes", key: "notes", width: 36 },
+    { header: "CV File", key: "cvFile", width: 24 },
+    { header: "Certificate Files", key: "certificateFiles", width: 42 }
+  ], applications.map((application) => ({
+    appliedAt: application.createdAt,
+    status: application.status,
+    opportunityType: application.opportunityTypeLabel,
+    opportunity: application.opportunityTitle,
+    firstName: application.firstName,
+    surname: application.surname,
+    fullName: application.fullName,
+    phone: application.phone,
+    email: application.email,
+    city: application.city,
+    province: application.province,
+    notes: application.notes,
+    cvFile: application.documents.cv?.name || "",
+    certificateFiles: (application.documents.certificates || []).map((file) => file.name).join(", ")
+  })));
+
+  addWorkbookSheet(workbook, "Province Summary", [
+    { header: "Province", key: "name", width: 24 },
+    { header: "Applications", key: "count", width: 16 }
+  ], countRowsFromMap(stats.byProvince));
+
+  addWorkbookSheet(workbook, "Opportunity Summary", [
+    { header: "Opportunity", key: "name", width: 42 },
+    { header: "Applications", key: "count", width: 16 }
+  ], countRowsFromMap(stats.byOpportunity));
+
+  addWorkbookSheet(workbook, "Communication List", [
+    { header: "Full Name", key: "fullName", width: 28 },
+    { header: "Phone", key: "phone", width: 18 },
+    { header: "Email", key: "email", width: 28 },
+    { header: "Province", key: "province", width: 18 },
+    { header: "City", key: "city", width: 18 },
+    { header: "Opportunity", key: "opportunity", width: 36 },
+    { header: "Status", key: "status", width: 14 }
+  ], applications.map((application) => ({
+    fullName: application.fullName,
+    phone: application.phone,
+    email: application.email,
+    province: application.province,
+    city: application.city,
+    opportunity: application.opportunityTitle,
+    status: application.status
+  })));
+
+  const output = await workbook.xlsx.writeBuffer();
+  return Buffer.isBuffer(output) ? output : Buffer.from(output);
+}
+
+function csvEscape(value) {
+  const text = String(value ?? "");
+  return /[",\r\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
+}
+
+function buildApplicationsCsv(db, filters = {}) {
+  const rows = exportRowsForApplications(applicationRows(db, filters));
+  const headers = Object.keys(rows[0] || {
+    "Applied At": "",
+    "Status": "",
+    "Opportunity Type": "",
+    "Opportunity": "",
+    "First Name": "",
+    "Surname": "",
+    "Full Name": "",
+    "Phone": "",
+    "Email": "",
+    "City": "",
+    "Province": "",
+    "Notes": "",
+    "CV File": "",
+    "Certificate Files": ""
+  });
+  return `\uFEFF${headers.join(",")}\r\n${rows.map((row) => headers.map((header) => csvEscape(row[header])).join(",")).join("\r\n")}`;
+}
+
+function exportFilename(ext) {
+  return `connect-za-applications-${new Date().toISOString().slice(0, 10)}.${ext}`;
+}
+
+function sendDownload(res, buffer, contentType, filename) {
+  const safeName = cleanStorageSegment(filename, "download").replace(/"/g, "");
+  res.writeHead(200, {
+    "Content-Type": contentType,
+    "Content-Disposition": `attachment; filename="${safeName}"`,
+    "Cache-Control": "no-store"
+  });
+  res.end(buffer);
+}
+
+function findApplicationFile(application, fileId) {
+  const files = [
+    application.documents?.cv,
+    ...(application.documents?.certificates || [])
+  ].filter(Boolean);
+  return files.find((file) => file.id === fileId);
+}
+
+async function downloadStoredPrivateFile(file) {
+  if (file?.data && isDataUrl(file.data)) {
+    const parsed = parseDataUrl(file.data, file.name || "document");
+    return { buffer: parsed.buffer, contentType: file.type || parsed.contentType };
+  }
+  if (file?.bucket && file?.path) {
+    if (!supabaseStorageConfigured()) {
+      const error = new Error("Supabase Storage is not configured for this stored file.");
+      error.statusCode = 503;
+      throw error;
+    }
+    const encodedPath = encodeStoragePath(file.path);
+    const endpoint = `${SUPABASE_URL.replace(/\/$/, "")}/storage/v1/object/${encodeURIComponent(file.bucket)}/${encodedPath}`;
+    const response = await fetch(endpoint, {
+      headers: {
+        apikey: SUPABASE_SERVICE_ROLE_KEY,
+        Authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`
+      }
+    });
+    if (!response.ok) {
+      const error = new Error("Could not download the stored application file.");
+      error.statusCode = response.status >= 400 ? response.status : 502;
+      throw error;
+    }
+    return {
+      buffer: Buffer.from(await response.arrayBuffer()),
+      contentType: response.headers.get("content-type") || file.type || "application/octet-stream"
+    };
+  }
+  const error = new Error("Application file was not found.");
+  error.statusCode = 404;
+  throw error;
+}
+
 async function readDb() {
   if (USE_SUPABASE_POSTGRES) {
     try {
@@ -973,7 +1582,7 @@ async function readDb() {
       databaseFallbackReason = "";
       if (result.rows[0]?.data) {
         const db = result.rows[0].data;
-        const changed = [removeDemoData(db), normalizeBusinessSubscriptions(db), ensureBootstrapAdmin(db)].some(Boolean);
+        const changed = [removeDemoData(db), normalizeBusinessSubscriptions(db), normalizeOpportunitiesAndApplications(db), ensureBootstrapAdmin(db)].some(Boolean);
         if (changed) await writeDb(db);
         return db;
       }
@@ -990,7 +1599,7 @@ async function readDb() {
       databaseFallbackReason = "";
       if (rows?.[0]?.data) {
         const db = rows[0].data;
-        const changed = [removeDemoData(db), normalizeBusinessSubscriptions(db), ensureBootstrapAdmin(db)].some(Boolean);
+        const changed = [removeDemoData(db), normalizeBusinessSubscriptions(db), normalizeOpportunitiesAndApplications(db), ensureBootstrapAdmin(db)].some(Boolean);
         if (changed) await writeDb(db);
         return db;
       }
@@ -1012,8 +1621,8 @@ async function readDb() {
     throw error;
   }
   ensureDb();
-  const db = JSON.parse(fs.readFileSync(DB_FILE, "utf8"));
-  const changed = [removeDemoData(db), normalizeBusinessSubscriptions(db), ensureBootstrapAdmin(db)].some(Boolean);
+  const db = JSON.parse(fs.readFileSync(DB_FILE, "utf8").replace(/^\uFEFF/, ""));
+  const changed = [removeDemoData(db), normalizeBusinessSubscriptions(db), normalizeOpportunitiesAndApplications(db), ensureBootstrapAdmin(db)].some(Boolean);
   if (changed) await writeDb(db);
   return db;
 }
@@ -1377,7 +1986,73 @@ async function api(req, res, pathname, query) {
     if (supabaseStorageConfigured()) {
       await ensureSupabaseStorageBuckets().catch(() => {});
     }
-    return sendJson(res, { categories, provinces, cities, settings: publicSettings(db.settings), databaseProvider: databaseProvider(), databaseStatus: databaseStatus(), storageStatus: storageStatus(), paymentStatus: paymentStatusForDb(db) });
+    return sendJson(res, { categories, provinces, cities, opportunityTypes, applicationStatuses, settings: publicSettings(db.settings), databaseProvider: databaseProvider(), databaseStatus: databaseStatus(), storageStatus: storageStatus(), paymentStatus: paymentStatusForDb(db) });
+  }
+
+  if (req.method === "GET" && pathname === "/api/opportunities") {
+    const q = String(query.q || "").trim().toLowerCase();
+    const type = String(query.type || "");
+    const province = String(query.province || "");
+    const city = String(query.city || "");
+    const today = new Date().toISOString().slice(0, 10);
+    const opportunities = (db.opportunities || [])
+      .filter((opportunity) => opportunity.status === "open")
+      .filter((opportunity) => !opportunity.closingDate || opportunity.closingDate >= today)
+      .filter((opportunity) => !q || [opportunity.title, opportunity.summary, opportunityTypeLabel(opportunity.type), opportunity.city, opportunity.province].join(" ").toLowerCase().includes(q))
+      .filter((opportunity) => !type || opportunity.type === type)
+      .filter((opportunity) => !province || !opportunity.province || opportunity.province === province)
+      .filter((opportunity) => !city || !opportunity.city || opportunity.city === city)
+      .sort((a, b) => {
+        const dateA = a.closingDate || "9999-12-31";
+        const dateB = b.closingDate || "9999-12-31";
+        return dateA.localeCompare(dateB) || a.title.localeCompare(b.title);
+      })
+      .map((opportunity) => publicOpportunity(opportunity, db));
+    return sendJson(res, { opportunities });
+  }
+
+  if (req.method === "POST" && pathname === "/api/applications") {
+    const body = await readBody(req);
+    const opportunity = (db.opportunities || []).find((item) => item.id === body.opportunityId);
+    if (!opportunity || opportunity.status !== "open") return sendJson(res, { error: "This opportunity is not open for applications." }, 404);
+    const today = new Date().toISOString().slice(0, 10);
+    if (opportunity.closingDate && opportunity.closingDate < today) return sendJson(res, { error: "This opportunity has already closed." }, 400);
+    const firstName = cleanText(body.firstName, 80);
+    const surname = cleanText(body.surname, 80);
+    const email = cleanText(body.email, 160).toLowerCase();
+    const phone = cleanText(body.phone, 40);
+    const province = canonicalFromList(body.province, provinces);
+    const city = canonicalFromList(body.city, cities);
+    if (!firstName || !surname) return sendJson(res, { error: "Name and surname are required." }, 400);
+    if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return sendJson(res, { error: "A valid email address is required." }, 400);
+    if (!phone) return sendJson(res, { error: "Phone number is required." }, 400);
+    if (!province) return sendJson(res, { error: "Please select one of South Africa's nine provinces." }, 400);
+    if (!city) return sendJson(res, { error: "Please select a South African city or town from the list." }, 400);
+    if (!body.cv) return sendJson(res, { error: "Please upload a CV." }, 400);
+    const applicationId = uid("app");
+    const application = {
+      id: applicationId,
+      opportunityId: opportunity.id,
+      opportunityTitle: opportunity.title,
+      opportunityType: opportunity.type,
+      firstName,
+      surname,
+      email,
+      phone,
+      province,
+      city,
+      notes: cleanMultiline(body.notes, 900),
+      status: "new",
+      documents: await prepareApplicationUploads(body, applicationId),
+      createdAt: new Date().toISOString()
+    };
+    db.applications.push(application);
+    db.analytics ||= {};
+    db.analytics.applications = db.applications.length;
+    db.notifications.push({ id: uid("not"), type: "application", text: `${firstName} ${surname} applied for ${opportunity.title}`, createdAt: application.createdAt, read: false });
+    await writeDb(db);
+    broadcast("application", publicApplication(application, db));
+    return sendJson(res, { application: publicApplication(application, db) }, 201);
   }
 
   if (req.method === "POST" && pathname === "/api/auth/register") {
@@ -1391,7 +2066,7 @@ async function api(req, res, pathname, query) {
     const user = {
       id: uid("usr"),
       type: ["customer", "business"].includes(body.type) ? body.type : "customer",
-      name: String(body.name || "New Connect-ZA User"),
+      name: String(body.name || "New Opportunity Hub User"),
       email: String(body.email).toLowerCase(),
       phone: String(body.phone),
       passwordHash: hashPassword(String(body.password)),
@@ -1748,6 +2423,32 @@ async function api(req, res, pathname, query) {
     return sendJson(res, { error: "Yoco payments are confirmed by signed Yoco webhooks only." }, 401);
   }
 
+  if (req.method === "GET" && pathname === "/api/admin/applications.xlsx") {
+    const user = requireAuth(req, res, db, "admin");
+    if (!user) return;
+    const buffer = await buildApplicationsWorkbook(db, query);
+    return sendDownload(res, buffer, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", exportFilename("xlsx"));
+  }
+
+  if (req.method === "GET" && pathname === "/api/admin/applications.csv") {
+    const user = requireAuth(req, res, db, "admin");
+    if (!user) return;
+    const csv = buildApplicationsCsv(db, query);
+    return sendDownload(res, Buffer.from(csv, "utf8"), "text/csv; charset=utf-8", exportFilename("csv"));
+  }
+
+  const applicationFileMatch = pathname.match(/^\/api\/admin\/applications\/([^/]+)\/files\/([^/]+)$/);
+  if (req.method === "GET" && applicationFileMatch) {
+    const user = requireAuth(req, res, db, "admin");
+    if (!user) return;
+    const application = (db.applications || []).find((item) => item.id === applicationFileMatch[1]);
+    if (!application) return sendJson(res, { error: "Application not found." }, 404);
+    const file = findApplicationFile(application, applicationFileMatch[2]);
+    if (!file) return sendJson(res, { error: "Application file not found." }, 404);
+    const downloaded = await downloadStoredPrivateFile(file);
+    return sendDownload(res, downloaded.buffer, downloaded.contentType || file.type || "application/octet-stream", file.name || "application-file");
+  }
+
   if (req.method === "GET" && pathname === "/api/admin") {
     const user = requireAuth(req, res, db, "admin");
     if (!user) return;
@@ -1755,6 +2456,9 @@ async function api(req, res, pathname, query) {
       users: db.users.map(publicUser),
       businesses: db.businesses,
       quotes: db.quotes,
+      opportunities: (db.opportunities || []).map((opportunity) => publicOpportunity(opportunity, db)),
+      applications: (db.applications || []).map((application) => publicApplication(application, db)),
+      applicationStats: applicationStats(db),
       notifications: db.notifications,
       ads: db.ads,
       paymentStatus: paymentStatusForDb(db),
@@ -1764,7 +2468,9 @@ async function api(req, res, pathname, query) {
         activeBusinesses: db.businesses.filter((biz) => biz.status === "approved").length,
         activeListings: db.businesses.filter((biz) => biz.status === "approved" && activeListing(biz)).length,
         pendingBusinesses: db.businesses.filter((biz) => biz.status === "pending").length,
-        users: db.users.length
+        users: db.users.length,
+        applications: (db.applications || []).length,
+        opportunities: (db.opportunities || []).filter((item) => item.status === "open").length
       }
     });
   }
@@ -1788,6 +2494,36 @@ async function api(req, res, pathname, query) {
       refreshSubscriptionAnalytics(db);
       await writeDb(db);
       return sendJson(res, { business });
+    }
+    if (pathname === "/api/admin/applications/status") {
+      const application = (db.applications || []).find((item) => item.id === body.applicationId);
+      if (!application) return sendJson(res, { error: "Application not found." }, 404);
+      application.status = applicationStatuses.includes(body.status) ? body.status : application.status;
+      application.updatedAt = new Date().toISOString();
+      await writeDb(db);
+      return sendJson(res, { application: publicApplication(application, db) });
+    }
+    if (pathname === "/api/admin/opportunities") {
+      const opportunity = {
+        id: uid("opp"),
+        createdAt: new Date().toISOString(),
+        ...sanitizeOpportunity(body, null)
+      };
+      db.opportunities.push(opportunity);
+      db.analytics ||= {};
+      db.analytics.opportunities = db.opportunities.filter((item) => item.status === "open").length;
+      await writeDb(db);
+      return sendJson(res, { opportunity: publicOpportunity(opportunity, db) }, 201);
+    }
+    if (pathname === "/api/admin/opportunities/status") {
+      const opportunity = (db.opportunities || []).find((item) => item.id === body.opportunityId);
+      if (!opportunity) return sendJson(res, { error: "Opportunity not found." }, 404);
+      opportunity.status = opportunityStatus(body.status, opportunity.status);
+      opportunity.updatedAt = new Date().toISOString();
+      db.analytics ||= {};
+      db.analytics.opportunities = db.opportunities.filter((item) => item.status === "open").length;
+      await writeDb(db);
+      return sendJson(res, { opportunity: publicOpportunity(opportunity, db) });
     }
     if (pathname === "/api/admin/ads") {
       const ad = { id: uid("ad"), title: String(body.title || "Sponsored listing"), placement: String(body.placement || "homepage"), active: true, clicks: 0, impressions: 0 };
@@ -1844,7 +2580,7 @@ const server = http.createServer(async (req, res) => {
   try {
     const parsed = url.parse(req.url, true);
     const apiRoute = parsed.pathname.startsWith("/api/") || parsed.pathname === "/webhooks/yoco";
-    if (parsed.pathname === "/health") return sendJson(res, { ok: true, service: "connect-za", databaseProvider: databaseProvider() });
+    if (parsed.pathname === "/health") return sendJson(res, { ok: true, service: "opportunity-hub", databaseProvider: databaseProvider() });
     if (apiRoute && Number(req.headers["content-length"] || 0) > MAX_BODY) {
       return sendJson(res, { error: `Uploaded files are too large. Please keep the total upload below ${MAX_BODY_MB}MB.` }, 413);
     }
@@ -1858,5 +2594,5 @@ const server = http.createServer(async (req, res) => {
 
 if (!USE_SUPABASE) ensureDb();
 server.listen(PORT, () => {
-  console.log(`Connect-ZA running at http://localhost:${PORT} using ${databaseProvider()}`);
+  console.log(`Opportunity Hub running at http://localhost:${PORT} using ${databaseProvider()}`);
 });
